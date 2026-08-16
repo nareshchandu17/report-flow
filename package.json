@@ -1,0 +1,19 @@
+{
+  "name": "report-flow",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:api": "npm run dev --workspace=api",
+    "dev:worker": "npm run dev --workspace=worker",
+    "dev:web": "npm run dev --workspace=web",
+    "db:migrate": "npm run db:migrate --workspace=database",
+    "db:seed": "npm run db:seed --workspace=database",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  }
+}
