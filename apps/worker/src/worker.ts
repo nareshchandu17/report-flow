@@ -1,4 +1,4 @@
-import { Worker } from 'bullmq';
+import { Worker, Queue } from 'bullmq';
 import { QUEUE_NAME } from 'shared';
 import processor from './processor';
 import path from 'path';
@@ -6,6 +6,16 @@ import path from 'path';
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6390';
 
 console.log('Starting ReportWorker...');
+
+const queue = new Queue(QUEUE_NAME, { connection: { url: REDIS_URL } });
+
+// Register the nightly cron job
+queue.add('schedule-daily-sales-report', {}, {
+  repeat: {
+    pattern: '0 0 * * *' // Midnight every day
+  },
+  jobId: 'daily-sales-report' // Prevents duplicate registrations
+});
 
 const worker = new Worker(QUEUE_NAME, processor, {
   connection: {

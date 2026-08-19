@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
 import { FileText, LayoutDashboard, History } from "lucide-react";
+import { EdgeAura } from "edge-aura/react";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,6 +20,14 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={inter.className}>
+        <EdgeAura
+          options={{
+            geometry: { band: 40, cornerFill: true },
+            palette: { pastel: 0.22, ringAlpha: 0.53, normalize: false, background: "dark", blendMode: "plus-lighter" },
+            motion: { hueDriftDeg: 0 },
+            input: { tapEnergy: 1.1, keyEnergy: 1.2 },
+          }}
+        />
         <div className="flex min-h-screen flex-col">
           <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-black/40 backdrop-blur-xl">
             <div className="container mx-auto flex h-16 items-center px-4">

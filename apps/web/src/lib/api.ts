@@ -53,5 +53,12 @@ export const api = {
     });
     if (!res.ok) throw new Error('Failed to retry report');
     return res.json();
+  },
+
+  getReportPreview: async (type: string, fromDate: string, toDate: string) => {
+    const params = new URLSearchParams({ type, fromDate, toDate });
+    const res = await fetch(`${API_BASE_URL}/reports/preview?${params.toString()}`);
+    if (!res.ok) throw new Error('Failed to fetch report preview');
+    return res.json();
   }
 };

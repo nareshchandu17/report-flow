@@ -1,5 +1,5 @@
-import { prisma } from 'database';
-import { ReportData } from '../pdf/generator';
+import { prisma } from './client';
+import { ReportData } from 'shared';
 
 export const generateSalesSummary = async (fromDate: Date, toDate: Date): Promise<ReportData> => {
   const result = await prisma.order.aggregate({

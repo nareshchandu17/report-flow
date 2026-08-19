@@ -1,16 +1,38 @@
 import { Job } from 'bullmq';
 import { prisma } from 'database';
 import { JOB_STATUS, REPORT_TYPES } from 'shared';
-import { generateSalesSummary, generateOrderAnalytics } from './aggregations';
+import { generateSalesSummary, generateOrderAnalytics } from 'database';
 import { generatePDF } from './pdf/generator';
 import { LocalArtifactStorage } from './storage/LocalArtifactStorage';
 
 const storage = new LocalArtifactStorage();
 
 export default async function (job: Job) {
-  const { jobId } = job.data;
-  
+  let { jobId } = job.data;
+
   try {
+    // Handle scheduled cron jobs
+    if (job.name === 'schedule-daily-sales-report') {
+      const toDate = new Date();
+      toDate.setHours(0, 0, 0, 0); // Midnight today
+      const fromDate = new Date(toDate);
+      fromDate.setDate(fromDate.getDate() - 1); // Midnight yesterday
+      
+      const user = await prisma.user.findFirst({ where: { email: 'test@example.com' } });
+      if (!user) throw new Error("No admin user found to attach scheduled report to");
+
+      const scheduledJob = await prisma.reportJob.create({
+        data: {
+          userId: user.id,
+          reportType: REPORT_TYPES.SALES_SUMMARY,
+          fromDate,
+          toDate,
+          status: JOB_STATUS.QUEUED
+        }
+      });
+      jobId = scheduledJob.id;
+    }
+
     const reportJob = await prisma.reportJob.findUnique({
       where: { id: jobId }
     });

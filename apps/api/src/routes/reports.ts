@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { prisma } from 'database';
-import { CreateReportSchema, JOB_STATUS } from 'shared';
+import { prisma, generateSalesSummary, generateOrderAnalytics } from 'database';
+import { CreateReportSchema, JOB_STATUS, REPORT_TYPES } from 'shared';
 import { reportQueue } from '../queue';
 import { authMiddleware } from '../middleware/auth';
 import { createReadStream } from 'fs';
@@ -8,6 +8,34 @@ import { stat } from 'fs/promises';
 
 const router = Router();
 router.use(authMiddleware);
+
+// GET /api/reports/preview
+router.get('/preview', async (req: Request, res: Response) => {
+  try {
+    const { type, fromDate, toDate } = req.query;
+    
+    if (!type || !fromDate || !toDate) {
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Missing required query parameters' } });
+    }
+
+    const from = new Date(fromDate as string);
+    const to = new Date(toDate as string);
+
+    let data;
+    if (type === 'SALES_SUMMARY') {
+      data = await generateSalesSummary(from, to);
+    } else if (type === 'ORDER_ANALYTICS') {
+      data = await generateOrderAnalytics(from, to);
+    } else {
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Invalid report type' } });
+    }
+
+    res.json(data);
+  } catch (error) {
+    req.log.error(error);
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'An internal error occurred' } });
+  }
+});
 
 // POST /api/reports
 router.post('/', async (req: Request, res: Response) => {
