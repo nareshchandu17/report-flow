@@ -1,4 +1,4 @@
-import { PrismaClient, OrderStatus } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -51,10 +51,10 @@ async function main() {
 
     // Status distribution: 80% Completed, 10% Pending, 5% Cancelled, 5% Refunded
     const statusRand = Math.random();
-    let status: OrderStatus = OrderStatus.COMPLETED;
-    if (statusRand > 0.95) status = OrderStatus.REFUNDED;
-    else if (statusRand > 0.90) status = OrderStatus.CANCELLED;
-    else if (statusRand > 0.80) status = OrderStatus.PENDING;
+    let status = 'COMPLETED';
+    if (statusRand > 0.95) status = 'REFUNDED';
+    else if (statusRand > 0.90) status = 'CANCELLED';
+    else if (statusRand > 0.80) status = 'PENDING';
 
     orders.push({
       customerName,

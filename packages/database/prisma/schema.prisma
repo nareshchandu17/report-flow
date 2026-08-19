@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./report.db"
 }
 
 model User {
@@ -16,36 +16,26 @@ model User {
   jobs      ReportJob[]
 }
 
-enum OrderStatus {
-  PENDING
-  COMPLETED
-  CANCELLED
-  REFUNDED
-}
+
 
 model Order {
   id           String      @id @default(uuid())
   customerName String
   amount       Float
-  status       OrderStatus
+  status       String
   createdAt    DateTime    @default(now())
 
   @@index([createdAt])
   @@index([status])
 }
 
-enum JobStatus {
-  QUEUED
-  PROCESSING
-  COMPLETED
-  FAILED
-}
+
 
 model ReportJob {
   id             String    @id @default(uuid())
   userId         String
   reportType     String
-  status         JobStatus @default(QUEUED)
+  status         String    @default("QUEUED")
   fromDate       DateTime
   toDate         DateTime
   progress       Int       @default(0)
