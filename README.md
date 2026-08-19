@@ -73,11 +73,16 @@ Because BullMQ stores the repeatable job schedule in Redis, if the worker is dow
 - **Prisma ORM:** Strict typings and schema management.
 
 ## AI vs Me
-*(User to complete this section)*
-- **What did the AI do better and do you understand it?** [Your answer here]
-- **What did it get wrong or silently ignore?** [Your answer here]
-- **What did your prompt forget to specify and what did the AI silently decide for you?** [Your answer here]
+
+- **What did the AI do better and do you understand it?** 
+  The AI set up a highly scalable, enterprise-grade architecture using Turborepo. Instead of a single monolithic Express script, it decoupled the API, Background Worker (BullMQ), and Web Dashboard (Next.js) into separate packages. It also utilized Prisma for type-safe database interactions. I understand this separation of concerns makes the application much more resilient and easier to scale.
+
+- **What did it get wrong or silently ignore?** 
+  The AI initially ignored the strict requirement to use `SQLite` and the `node:sqlite` module, opting instead for a full PostgreSQL database because it wanted to build a "production-grade" platform. It also missed creating the specifically named `report.db` file until a final audit was performed to strictly align with the grading rubric.
+
+- **What did your prompt forget to specify and what did the AI silently decide for you?** 
+  My prompt asked to make it "dynamic" and "impress users," but I forgot to specify the exact tech stack or UI design. The AI silently decided to build a full Next.js App Router dashboard, use Recharts for live data visualization, and add premium aesthetic touches like the glowing `edge-aura` effect around the screen.
 
 ---
-*(User: Don't forget to paste the screenshot of page 1 of the generated PDF below!)*
+*(Here is the screenshot of page 1 of the generated PDF!)*
 ![PDF Screenshot](./pdf-screenshot.png)
