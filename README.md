@@ -4,6 +4,46 @@ ReportFlow is a tool that generates PDF reports in the background. It takes your
 
 This project was built for the FlyRank Internship - Backend Track (Week 4: Assignment A8).
 
+## System Architecture
+
+```mermaid
+graph TD
+    subgraph Web App
+        UI[Next.js Dashboard]
+    end
+
+    subgraph API Service
+        API[Express API]
+    end
+
+    subgraph Background Processing
+        Queue[BullMQ Redis Queue]
+        Worker[Report Worker Process]
+    end
+
+    subgraph Data & Storage
+        DB[(SQLite / Prisma)]
+        Disk[Artifact Storage]
+    end
+
+    UI -- "1. Explore Data (Live)" --> API
+    API -- "2. SQL Aggregation" --> DB
+    DB -- "Results" --> API
+    API -- "Preview JSON" --> UI
+    
+    UI -- "3. Generate PDF (POST)" --> API
+    API -- "4. Enqueue Job" --> Queue
+    API -- "5. 202 Accepted" --> UI
+    
+    Queue -- "6. Process Job" --> Worker
+    Worker -- "7. Fetch Heavy Data" --> DB
+    Worker -- "8. Render HTML to PDF" --> Disk
+    Worker -- "9. Update Status: Completed" --> DB
+    
+    UI -- "10. Download PDF (GET)" --> API
+    API -- "11. Serve File" --> Disk
+```
+
 ## Dataset
 We used the "Little Shop" dataset (Option A). The setup script automatically adds 5,000 fake orders into the database so we have realistic data to work with.
 
