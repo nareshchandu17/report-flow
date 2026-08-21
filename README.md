@@ -7,41 +7,37 @@ This project was built for the FlyRank Internship - Backend Track (Week 4: Assig
 ## System Architecture
 
 ```mermaid
-graph TD
-    subgraph Web App
-        UI[Next.js Dashboard]
-    end
+sequenceDiagram
+    autonumber
+    actor User
+    participant API as Express API
+    participant DB as SQLite DB
+    participant Queue as Redis Queue
+    participant Worker as Background Worker
 
-    subgraph API Service
-        API[Express API]
-    end
+    Note over User,DB: Phase 1: Live Exploration
+    User->>API: Select dates for preview
+    API->>DB: Quick SQL aggregations
+    DB-->>API: Metric results
+    API-->>User: Charts update instantly
 
-    subgraph Background Processing
-        Queue[BullMQ Redis Queue]
-        Worker[Report Worker Process]
-    end
-
-    subgraph Data & Storage
-        DB[(SQLite / Prisma)]
-        Disk[Artifact Storage]
-    end
-
-    UI -- "1. Explore Data (Live)" --> API
-    API -- "2. SQL Aggregation" --> DB
-    DB -- "Results" --> API
-    API -- "Preview JSON" --> UI
+    Note over User,Worker: Phase 2: Asynchronous PDF Generation
+    User->>API: Click "Download PDF"
+    API->>DB: Create Job (Status: QUEUED)
+    API->>Queue: Enqueue heavy job
+    API-->>User: 202 Accepted (Job ID returned)
     
-    UI -- "3. Generate PDF (POST)" --> API
-    API -- "4. Enqueue Job" --> Queue
-    API -- "5. 202 Accepted" --> UI
+    Note over Queue,Worker: Phase 3: Background Processing (Non-blocking)
+    Queue->>Worker: Trigger Worker Process
+    Worker->>DB: Fetch massive dataset
+    Worker->>Worker: Render HTML -> PDF
+    Worker->>DB: Save Artifact Path (Status: COMPLETED)
     
-    Queue -- "6. Process Job" --> Worker
-    Worker -- "7. Fetch Heavy Data" --> DB
-    Worker -- "8. Render HTML to PDF" --> Disk
-    Worker -- "9. Update Status: Completed" --> DB
-    
-    UI -- "10. Download PDF (GET)" --> API
-    API -- "11. Serve File" --> Disk
+    Note over User,API: Phase 4: Retrieval
+    User->>API: Poll Job Status (GET /reports/:id)
+    API-->>User: Status: COMPLETED
+    User->>API: Request File (GET /download)
+    API-->>User: Serve final PDF file
 ```
 
 ## Dataset
