@@ -17,6 +17,8 @@
     "test": "npm run test --workspaces --if-present"
   },
   "devDependencies": {
-    "concurrently": "^10.0.5"
+    "@mermaid-js/mermaid-cli": "^11.16.0",
+    "concurrently": "^10.0.5",
+    "puppeteer": "^25.8.0"
   }
 }

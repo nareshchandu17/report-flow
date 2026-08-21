@@ -29,7 +29,7 @@ export default function RootLayout({
           }}
         />
         <div className="flex min-h-screen flex-col">
-          <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-black/40 backdrop-blur-xl">
+          <header className="z-50 w-full border-b border-white/10 bg-black/40 backdrop-blur-xl">
             <div className="container mx-auto flex h-16 items-center px-4">
               <div className="mr-8 flex items-center gap-2 text-white font-bold text-xl tracking-tight">
                 <div className="bg-blue-600 p-1.5 rounded-lg">
