@@ -5,7 +5,7 @@ import { api, ReportJob } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileDown, RefreshCw, AlertCircle, ArrowLeft } from "lucide-react";
+import { FileDown, RefreshCw, AlertCircle, ArrowLeft, Loader2, Clock, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { API_BASE_URL } from "@/lib/api";
 
@@ -14,13 +14,17 @@ export default function ReportDetails({ params }: { params: Promise<{ id: string
   const { id } = resolvedParams;
   const [report, setReport] = useState<ReportJob | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
 
   const fetchReport = async () => {
     try {
       const data = await api.getReport(id);
       setReport(data);
-    } catch (error) {
-      console.error(error);
+      setError(null);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to fetch report details');
     } finally {
       setLoading(false);
     }
@@ -43,21 +47,75 @@ export default function ReportDetails({ params }: { params: Promise<{ id: string
 
   const handleRetry = async () => {
     try {
-      setLoading(true);
+      setRetrying(true);
       await api.retryReport(id);
       await fetchReport();
-    } catch (error) {
-      console.error('Retry failed:', error);
+    } catch (err: any) {
+      console.error('Retry failed:', err);
+      setError(err.message || 'Failed to retry job');
+    } finally {
+      setRetrying(false);
     }
   };
 
   if (loading && !report) {
-    return <div className="flex h-64 items-center justify-center"><RefreshCw className="animate-spin text-white/50" /></div>;
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="animate-spin text-blue-500 h-8 w-8 mx-auto" />
+          <p className="text-muted-foreground">Loading report details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !report) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="text-center space-y-4 max-w-md">
+          <AlertCircle className="text-red-500 h-12 w-12 mx-auto" />
+          <p className="text-red-400">{error}</p>
+          <Button onClick={fetchReport} variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10">
+            <RefreshCw className="mr-2 h-4 w-4" /> Retry
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   if (!report) {
-    return <div className="text-red-400">Report not found</div>;
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="text-center space-y-4">
+          <AlertCircle className="text-muted-foreground h-12 w-12 mx-auto" />
+          <p className="text-muted-foreground">Report not found</p>
+          <Button variant="outline" asChild>
+            <Link href="/reports">Back to Reports</Link>
+          </Button>
+        </div>
+      </div>
+    );
   }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'COMPLETED': return 'success';
+      case 'FAILED': return 'destructive';
+      case 'PROCESSING': return 'warning';
+      case 'QUEUED': return 'default';
+      default: return 'default';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'COMPLETED': return <CheckCircle2 className="h-3 w-3" />;
+      case 'FAILED': return <AlertCircle className="h-3 w-3" />;
+      case 'PROCESSING': return <Loader2 className="h-3 w-3 animate-spin" />;
+      case 'QUEUED': return <Clock className="h-3 w-3" />;
+      default: return null;
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -72,11 +130,8 @@ export default function ReportDetails({ params }: { params: Promise<{ id: string
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>{report.reportType.replace('_', ' ')}</CardTitle>
-            <Badge variant={
-              report.status === 'COMPLETED' ? 'success' :
-              report.status === 'FAILED' ? 'destructive' :
-              report.status === 'PROCESSING' ? 'warning' : 'default'
-            }>
+            <Badge variant={getStatusColor(report.status)} className="flex items-center gap-1">
+              {getStatusIcon(report.status)}
               {report.status}
             </Badge>
           </div>
@@ -97,7 +152,7 @@ export default function ReportDetails({ params }: { params: Promise<{ id: string
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-muted-foreground">Created</p>
               <p className="font-medium text-white">{new Date(report.createdAt).toLocaleString()}</p>
@@ -125,23 +180,48 @@ export default function ReportDetails({ params }: { params: Promise<{ id: string
               </div>
             </div>
           )}
+
+          {report.status === 'PROCESSING' && (
+            <div className="rounded-lg bg-blue-500/20 border border-blue-500/30 p-4 flex items-start gap-3">
+              <Loader2 className="h-5 w-5 text-blue-500 mt-0.5 animate-spin" />
+              <div>
+                <h4 className="text-sm font-semibold text-blue-400">Processing in Progress</h4>
+                <p className="text-sm text-blue-400/80 mt-1">Your report is being generated. This may take a few moments.</p>
+              </div>
+            </div>
+          )}
+
+          {report.status === 'QUEUED' && (
+            <div className="rounded-lg bg-yellow-500/20 border border-yellow-500/30 p-4 flex items-start gap-3">
+              <Clock className="h-5 w-5 text-yellow-500 mt-0.5" />
+              <div>
+                <h4 className="text-sm font-semibold text-yellow-400">Queued for Processing</h4>
+                <p className="text-sm text-yellow-400/80 mt-1">Your report is in the queue and will be processed shortly.</p>
+              </div>
+            </div>
+          )}
         </CardContent>
 
         <CardFooter className="flex justify-between bg-white/[0.02] border-t border-white/5 py-4">
           {report.status === 'FAILED' ? (
-            <Button variant="outline" onClick={handleRetry} disabled={loading}>
-              <RefreshCw className="mr-2 h-4 w-4" /> Retry Job
+            <Button variant="outline" onClick={handleRetry} disabled={retrying}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${retrying ? 'animate-spin' : ''}`} /> 
+              {retrying ? 'Retrying...' : 'Retry Job'}
             </Button>
-          ) : (
+          ) : report.status === 'COMPLETED' ? (
             <Button 
-              variant="glass" 
+              variant="default" 
               asChild 
-              disabled={!report.downloadAvailable}
-              className={!report.downloadAvailable ? 'opacity-50 pointer-events-none' : ''}
+              className="bg-blue-600 hover:bg-blue-700"
             >
               <a href={`${API_BASE_URL}/reports/${report.id}/download`} download>
-                <FileDown className="mr-2 h-4 w-4" /> Download PDF Artifact
+                <FileDown className="mr-2 h-4 w-4" /> Download PDF
               </a>
+            </Button>
+          ) : (
+            <Button variant="outline" disabled>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+              {report.status === 'PROCESSING' ? 'Processing...' : 'Queued...'}
             </Button>
           )}
         </CardFooter>

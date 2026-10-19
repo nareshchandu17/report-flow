@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, BarChart, FileOutput, Loader2, Calendar, DollarSign, ShoppingCart, CheckCircle, TrendingUp } from "lucide-react";
+import { FileText, BarChart, FileOutput, Loader2, Calendar, DollarSign, ShoppingCart, CheckCircle, TrendingUp, AlertCircle, RefreshCw } from "lucide-react";
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart as RechartsBarChart, Bar } from 'recharts';
@@ -24,15 +24,20 @@ export default function Dashboard() {
   // Preview Data State
   const [previewData, setPreviewData] = useState<any>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(true);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchPreview() {
       setIsLoadingPreview(true);
+      setPreviewError(null);
       try {
         const data = await api.getReportPreview(reportType, new Date(fromDate).toISOString(), new Date(toDate).toISOString());
         setPreviewData(data);
-      } catch (err) {
+        setPreviewError(null);
+      } catch (err: any) {
         console.error("Failed to fetch preview", err);
+        setPreviewError(err.message || 'Failed to load preview data');
+        setPreviewData(null);
       } finally {
         setIsLoadingPreview(false);
       }
@@ -109,9 +114,28 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {isLoadingPreview || !previewData ? (
+      {isLoadingPreview ? (
         <div className="h-[400px] flex items-center justify-center border border-white/10 rounded-2xl bg-white/5 backdrop-blur-sm">
           <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        </div>
+      ) : previewError ? (
+        <div className="h-[400px] flex flex-col items-center justify-center border border-red-500/20 rounded-2xl bg-red-500/5 backdrop-blur-sm gap-4">
+          <AlertCircle className="w-12 h-12 text-red-500" />
+          <p className="text-red-400 text-center max-w-md">{previewError}</p>
+          <Button 
+            onClick={() => {
+              setPreviewError(null);
+              setIsLoadingPreview(true);
+            }}
+            variant="outline"
+            className="border-red-500/50 text-red-400 hover:bg-red-500/10"
+          >
+            <RefreshCw className="mr-2 h-4 w-4" /> Retry
+          </Button>
+        </div>
+      ) : !previewData ? (
+        <div className="h-[400px] flex items-center justify-center border border-white/10 rounded-2xl bg-white/5 backdrop-blur-sm">
+          <p className="text-muted-foreground">No data available for selected date range</p>
         </div>
       ) : (
         <>

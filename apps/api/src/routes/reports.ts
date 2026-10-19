@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma, generateSalesSummary, generateOrderAnalytics } from 'database';
-import { CreateReportSchema, JOB_STATUS, REPORT_TYPES } from 'shared';
+import { CreateReportSchema, PaginationSchema, JOB_STATUS, REPORT_TYPES } from 'shared';
 import { reportQueue } from '../queue';
 import { authMiddleware } from '../middleware/auth';
 import { createReadStream } from 'fs';
@@ -20,6 +20,9 @@ router.get('/preview', async (req: Request, res: Response) => {
 
     const from = new Date(fromDate as string);
     const to = new Date(toDate as string);
+    
+    // Set toDate to end of day to include all data on the last day
+    to.setHours(23, 59, 59, 999);
 
     let data;
     if (type === 'SALES_SUMMARY') {
@@ -51,6 +54,10 @@ router.post('/', async (req: Request, res: Response) => {
 
     const { reportType, fromDate, toDate } = parsed.data;
 
+    // Set toDate to end of day to include all data on the last day
+    const to = new Date(toDate);
+    to.setHours(23, 59, 59, 999);
+
     // Check idempotency
     if (idempotencyKey) {
       const existingJob = await prisma.reportJob.findFirst({
@@ -67,7 +74,7 @@ router.post('/', async (req: Request, res: Response) => {
         userId,
         reportType,
         fromDate: new Date(fromDate),
-        toDate: new Date(toDate),
+        toDate: to,
         idempotencyKey
       }
     });
@@ -88,7 +95,9 @@ router.get('/', async (req: Request, res: Response) => {
     const userId = req.currentUser.id;
     const { status, type, page = '1', limit = '10' } = req.query;
 
-    const skip = (Number(page) - 1) * Number(limit);
+    // Validate pagination
+    const pagination = PaginationSchema.parse({ page, limit });
+    const skip = (pagination.page - 1) * pagination.limit;
     
     const where: any = { userId };
     if (status) where.status = status;
@@ -99,12 +108,12 @@ router.get('/', async (req: Request, res: Response) => {
         where,
         orderBy: { createdAt: 'desc' },
         skip,
-        take: Number(limit)
+        take: pagination.limit
       }),
       prisma.reportJob.count({ where })
     ]);
 
-    res.json({ data: reports, total, page: Number(page), limit: Number(limit) });
+    res.json({ data: reports, total, page: pagination.page, limit: pagination.limit });
   } catch (error) {
     req.log.error(error);
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'An internal error occurred' } });

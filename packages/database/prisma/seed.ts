@@ -23,13 +23,16 @@ async function main() {
 
   console.log(`Created user: ${user.name}`);
 
-  // Clear existing orders
-  await prisma.order.deleteMany({});
-  await prisma.reportJob.deleteMany({});
-  await prisma.reportArtifact.deleteMany({});
+  // Check if orders already exist to avoid destructive behavior
+  const existingOrders = await prisma.order.count();
+  if (existingOrders > 0) {
+    console.log(`Database already has ${existingOrders} orders. Skipping seed data generation.`);
+    console.log('To re-seed, manually delete orders first or use a fresh database.');
+    return;
+  }
 
   // Generate realistic orders over the last 6 months
-  const now = new Date('2026-08-16T12:00:00Z');
+  const now = new Date();
   const orders = [];
 
   for (let i = 0; i < 5000; i++) {
