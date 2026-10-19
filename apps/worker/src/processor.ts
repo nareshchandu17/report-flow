@@ -77,17 +77,39 @@ export default async function (job: Job) {
 
     // 95% → Artifact stored
     const fileName = `report_${reportJob.reportType}_${jobId}.pdf`;
-    const { path: storagePath, size } = await storage.store(jobId, fileName, pdfBuffer);
     
-    const artifact = await prisma.reportArtifact.create({
-      data: {
-        jobId,
-        fileName,
-        storagePath,
-        mimeType: 'application/pdf',
-        fileSize: size
+    // Check if artifact already exists (idempotency)
+    let artifact;
+    if (reportJob.artifactId) {
+      artifact = await prisma.reportArtifact.findUnique({
+        where: { id: reportJob.artifactId }
+      });
+    }
+    
+    if (!artifact) {
+      const { path: storagePath, size } = await storage.store(jobId, fileName, pdfBuffer);
+      
+      try {
+        artifact = await prisma.reportArtifact.create({
+          data: {
+            jobId,
+            fileName,
+            storagePath,
+            mimeType: 'application/pdf',
+            fileSize: size
+          }
+        });
+      } catch (dbError: any) {
+        // Cleanup orphaned file if DB update fails
+        try {
+          const fs = await import('fs/promises');
+          await fs.unlink(storagePath);
+        } catch (cleanupError) {
+          console.error('Failed to cleanup orphaned file:', cleanupError);
+        }
+        throw dbError;
       }
-    });
+    }
 
     await job.updateProgress(95);
     await prisma.reportJob.update({ where: { id: jobId }, data: { progress: 95, artifactId: artifact.id } });

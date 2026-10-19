@@ -30,6 +30,8 @@ worker.on('completed', (job) => {
 
 worker.on('failed', (job, err) => {
   console.error(`Job ${job?.id} failed:`, err);
+  // Job status is already marked as FAILED in processor.ts error handler
+  // Worker continues processing other jobs
 });
 
 // Handle graceful shutdown

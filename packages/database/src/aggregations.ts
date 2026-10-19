@@ -26,12 +26,12 @@ export const generateSalesSummary = async (fromDate: Date, toDate: Date): Promis
   // Daily revenue aggregation
   const dailyData = await prisma.$queryRaw<any[]>`
     SELECT 
-      DATE("createdAt" / 1000, 'unixepoch') as "Date", 
-      COUNT(*) as "Orders", 
+      DATE("createdAt") as "Date",
+      COUNT(*) as "Orders",
       SUM(amount) as "Revenue"
     FROM "Order"
-    WHERE "createdAt" >= ${fromDate.getTime()} AND "createdAt" <= ${toDate.getTime()}
-    GROUP BY DATE("createdAt" / 1000, 'unixepoch')
+    WHERE "createdAt" >= ${fromDate} AND "createdAt" <= ${toDate}
+    GROUP BY DATE("createdAt")
     ORDER BY "Date" ASC
   `;
 

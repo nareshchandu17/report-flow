@@ -1,124 +1,197 @@
 # ReportFlow
 
-ReportFlow is a tool that generates PDF reports in the background. It takes your data, turns it into a web page, and then prints it as a PDF.
+![ReportFlow](./architecture.png)
 
-This project was built for the FlyRank Internship - Backend Track (Week 4: Assignment A8).
+ReportFlow is an asynchronous PDF report generation system built with a modern microservices architecture. It processes data-intensive report generation tasks in the background using a job queue, ensuring responsive user experience even with large datasets.
 
-## System Architecture
+## Features
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User
-    participant API as Express API
-    participant DB as SQLite DB
-    participant Queue as Redis Queue
-    participant Worker as Background Worker
+- **Asynchronous Processing**: Background job queue powered by BullMQ and Redis for non-blocking report generation
+- **Real-time Preview**: Interactive dashboard with live data visualization before PDF generation
+- **Multiple Report Types**: Support for Sales Summary and Order Analytics reports
+- **Idempotent Operations**: Built-in idempotency checks to prevent duplicate processing
+- **Reliable Storage**: Local file storage with orphaned file cleanup on failure
+- **Scheduled Reports**: Cron-based daily report generation
+- **Type-Safe**: Full TypeScript implementation with Prisma ORM
+- **Modern UI**: Next.js dashboard with shadcn/ui components
 
-    Note over User,DB: Phase 1: Live Exploration
-    User->>API: Select dates for preview
-    API->>DB: Quick SQL aggregations
-    DB-->>API: Metric results
-    API-->>User: Charts update instantly
+## Architecture
 
-    Note over User,Worker: Phase 2: Asynchronous PDF Generation
-    User->>API: Click "Download PDF"
-    API->>DB: Create Job (Status: QUEUED)
-    API->>Queue: Enqueue heavy job
-    API-->>User: 202 Accepted (Job ID returned)
-    
-    Note over Queue,Worker: Phase 3: Background Processing (Non-blocking)
-    Queue->>Worker: Trigger Worker Process
-    Worker->>DB: Fetch massive dataset
-    Worker->>Worker: Render HTML -> PDF
-    Worker->>DB: Save Artifact Path (Status: COMPLETED)
-    
-    Note over User,API: Phase 4: Retrieval
-    User->>API: Poll Job Status (GET /reports/:id)
-    API-->>User: Status: COMPLETED
-    User->>API: Request File (GET /download)
-    API-->>User: Serve final PDF file
+ReportFlow consists of four main services:
+
+```
+┌─────────────┐      ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
+│   Web UI    │─────>│   API       │─────>│   Redis     │─────>│   Worker    │
+│  (Next.js)  │      │ (Express)   │      │  (Queue)    │      │ (Processor) │
+└─────────────┘      └─────────────┘      └─────────────┘      └─────────────┘
+                           │                                           │
+                           ▼                                           ▼
+                    ┌─────────────┐                           ┌─────────────┐
+                    │   SQLite    │                           │   Local     │
+                    │  Database   │                           │   Storage   │
+                    └─────────────┘                           └─────────────┘
 ```
 
-## Dataset
-We used the "Little Shop" dataset (Option A). The setup script automatically adds 5,000 fake orders into the database so we have realistic data to work with.
+### Components
 
-## How to Run It
+- **Web UI**: Next.js application for report management and preview
+- **API**: Express.js REST API for report creation and retrieval
+- **Worker**: Background processor for PDF generation using Playwright
+- **Database**: SQLite with Prisma ORM for data persistence
+- **Queue**: Redis-backed BullMQ for job scheduling and management
 
-1. **Install dependencies:**
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- Docker (for Redis)
+- npm or yarn
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/nareshchandu17/report-flow.git
+   cd report-flow
+   ```
+
+2. Install dependencies:
    ```bash
    npm install
    ```
 
-2. **Set up the Database & Add Data:**
+3. Start Redis:
+   ```bash
+   docker-compose up -d
+   ```
+
+4. Set up the database:
    ```bash
    npm run build --workspace=packages/database
    npm run db:seed --workspace=packages/database
    ```
-   *(This ensures `report.db` is created and filled with data locally).*
 
-3. **Start the app (API, Worker, and Web Dashboard):**
+5. Start the application:
    ```bash
    npm run dev
    ```
 
-## Aggregation SQL
+The application will be available at:
+- Web Dashboard: http://localhost:3000
+- API: http://localhost:4000
 
-Here is the SQL query we use to calculate the daily sales for the report:
+## Environment Variables
 
-```sql
-SELECT 
-  DATE("createdAt") as "Date", 
-  COUNT(*) as "Orders", 
-  SUM(amount) as "Revenue"
-FROM "Order"
-WHERE "createdAt" >= $1 AND "createdAt" <= $2
-GROUP BY DATE("createdAt")
-ORDER BY DATE("createdAt") ASC
+### Web Application
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEXT_PUBLIC_API_URL` | Base URL of the API | `http://localhost:4000/api` |
+
+### Worker
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `REDIS_URL` | Redis connection URL | `redis://127.0.0.1:6390` |
+
+## Usage
+
+### Creating a Report
+
+1. Navigate to the web dashboard
+2. Select report type and date range
+3. Click "Generate PDF Report"
+4. Monitor progress in real-time
+5. Download the completed PDF
+
+### API Endpoints
+
+#### Create Report
+```http
+POST /api/reports
+Content-Type: application/json
+Idempotency-Key: <unique-key>
+
+{
+  "reportType": "SALES_SUMMARY",
+  "fromDate": "2026-01-01",
+  "toDate": "2026-01-31"
+}
 ```
 
-## The POST -> Download Proof
-1. Open the dashboard at `http://localhost:3000`.
-2. Click **Generate PDF Report**. This sends a request to create the report.
-3. The server replies right away with an ID, letting you know the job has started in the background.
-4. The background worker takes this job, gets the data, builds the HTML, and saves it as a PDF using Playwright.
-5. You can then download the finished PDF using the link provided.
+#### Get Report Status
+```http
+GET /api/reports/:id
+```
 
-## Stage 4: Feel the Wait
-**At what point would you move this work out of the request?**
-You should move this work to the background as soon as it takes longer than a few seconds. If you don't, the user is stuck staring at a loading screen, and a long wait might cause the browser to give up and show a timeout error.
+#### Download Report
+```http
+GET /api/reports/:id/download
+```
 
-## Stage 5: Ask twice, get one
-**What your check protects against, and one real-world example:**
-Our check stops the app from doing the same work twice if a user accidentally double-clicks the 'Generate' button. A real-world example of why this matters is a checkout page: without this check, a double-click could charge a customer's credit card twice for one order!
+## Development
 
-## Stretch Goals Achieved!
+### Project Structure
 
-### Bring in A7 (Background Jobs)
-**What got better for the user, and what got more complex for you?**
-For the user, the app feels much faster because they don't have to wait 15 seconds on a frozen screen. For me, the code became more complicated because I had to set up a job queue, run a separate worker process, keep track of job statuses, and make the webpage check for updates.
+```
+report-flow/
+├── apps/
+│   ├── api/          # Express API server
+│   ├── web/          # Next.js web application
+│   └── worker/       # Background worker
+├── packages/
+│   ├── database/     # Prisma schema and utilities
+│   └── shared/       # Shared types and constants
+└── docker-compose.yml
+```
 
-### Cron It (Nightly Reports)
-**What happens to Monday's report if the server was down at 08:00?**
-Because our scheduling tool uses Redis, if the server is turned off at 08:00, it simply misses the alarm. When the server turns back on, that day's morning report just won't be created unless someone goes in and triggers it manually.
+### Running Tests
 
-### Extra Features (Make it Yours)
-- **Interactive Dashboard:** Built a Next.js website with charts to preview the data before creating a PDF.
-- **Edge Aura:** Added a nice glowing effect to the edges of the screen.
-- **Code Setup:** The project is split into separate folders (web, api, worker, database, shared) so the code stays neat and organized.
-- **Prisma:** A tool that makes it easier to talk to our database without making typing mistakes.
+```bash
+npm test
+```
 
-## AI vs Me
+### Building for Production
 
-- **What did the AI do better and do you understand it?** 
-  The AI split the project into multiple well-organized pieces (an API, a background worker, and a website) instead of putting everything in one big file. It also used Prisma to talk to the database safely. I understand that separating things like this makes the code much easier to read and maintain.
+```bash
+npm run build
+```
 
-- **What did it get wrong or silently ignore?** 
-  The AI initially used PostgreSQL instead of SQLite because it wanted to make the app more advanced. It also forgot to create the specific `report.db` file until we checked the instructions again at the end.
+## Deployment
 
-- **What did your prompt forget to specify and what did the AI silently decide for you?** 
-  I asked the AI to make the app "dynamic" and "impressive," but I didn't tell it exactly which tools or designs to use. The AI decided on its own to build a Next.js website, use charts for live data, and add a nice glowing effect to the edges of the screen.
+### Environment Setup
 
----
-*(Here is the screenshot of page 1 of the generated PDF!)*
+1. Set `NEXT_PUBLIC_API_URL` to your production API endpoint
+2. Configure `REDIS_URL` for the worker
+3. Ensure SQLite database file is persisted or use PostgreSQL for production
+
+### Recommended Deployment
+
+- **Web UI**: Vercel, Netlify, or any Node.js hosting
+- **API**: Render, Railway, or any Node.js hosting
+- **Worker**: Separate process with auto-restart (PM2, systemd)
+- **Redis**: Managed Redis service (Redis Cloud, Upstash)
+- **Database**: Consider PostgreSQL for production (change Prisma schema)
+
+## Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License.
+
+## Acknowledgments
+
+Built as part of the FlyRank Internship - Backend Track (Week 4: Assignment A8).
+
+## Report Sample
+
 ![PDF Screenshot](./pdf-screenshot.png)
