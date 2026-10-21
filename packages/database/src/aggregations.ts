@@ -1,9 +1,18 @@
 import { prisma } from './client';
 import { ReportData } from 'shared';
 
-export const generateSalesSummary = async (fromDate: Date, toDate: Date): Promise<ReportData> => {
+export const generateSalesSummary = async (fromDate: Date, toDate: Date, datasetId: string): Promise<ReportData> => {
+  const dataset = await prisma.dataset.findUnique({
+    where: { id: datasetId }
+  });
+
+  if (!dataset) {
+    throw new Error(`Dataset not found: ${datasetId}`);
+  }
+
   const result = await prisma.order.aggregate({
     where: {
+      datasetId,
       createdAt: { gte: fromDate, lte: toDate }
     },
     _sum: { amount: true },
@@ -12,6 +21,7 @@ export const generateSalesSummary = async (fromDate: Date, toDate: Date): Promis
 
   const completedResult = await prisma.order.aggregate({
     where: {
+      datasetId,
       createdAt: { gte: fromDate, lte: toDate },
       status: 'COMPLETED'
     },
@@ -30,7 +40,7 @@ export const generateSalesSummary = async (fromDate: Date, toDate: Date): Promis
       COUNT(*) as "Orders",
       SUM(amount) as "Revenue"
     FROM "Order"
-    WHERE "createdAt" >= ${fromDate} AND "createdAt" <= ${toDate}
+    WHERE "datasetId" = ${datasetId} AND "createdAt" >= ${fromDate} AND "createdAt" <= ${toDate}
     GROUP BY DATE("createdAt")
     ORDER BY "Date" ASC
   `;
@@ -38,6 +48,8 @@ export const generateSalesSummary = async (fromDate: Date, toDate: Date): Promis
   return {
     title: 'Sales Performance Report',
     dateRange: `${fromDate.toLocaleDateString()} - ${toDate.toLocaleDateString()}`,
+    datasetName: dataset.name,
+    currency: dataset.currency,
     metrics: {
       totalRevenue,
       totalOrders,
@@ -52,9 +64,18 @@ export const generateSalesSummary = async (fromDate: Date, toDate: Date): Promis
   };
 };
 
-export const generateOrderAnalytics = async (fromDate: Date, toDate: Date): Promise<ReportData> => {
+export const generateOrderAnalytics = async (fromDate: Date, toDate: Date, datasetId: string): Promise<ReportData> => {
+  const dataset = await prisma.dataset.findUnique({
+    where: { id: datasetId }
+  });
+
+  if (!dataset) {
+    throw new Error(`Dataset not found: ${datasetId}`);
+  }
+
   const result = await prisma.order.aggregate({
     where: {
+      datasetId,
       createdAt: { gte: fromDate, lte: toDate }
     },
     _sum: { amount: true },
@@ -63,6 +84,7 @@ export const generateOrderAnalytics = async (fromDate: Date, toDate: Date): Prom
 
   const completedResult = await prisma.order.aggregate({
     where: {
+      datasetId,
       createdAt: { gte: fromDate, lte: toDate },
       status: 'COMPLETED'
     },
@@ -75,7 +97,7 @@ export const generateOrderAnalytics = async (fromDate: Date, toDate: Date): Prom
       COUNT(*) as "count", 
       SUM(amount) as "amount"
     FROM "Order"
-    WHERE "createdAt" >= ${fromDate} AND "createdAt" <= ${toDate}
+    WHERE "datasetId" = ${datasetId} AND "createdAt" >= ${fromDate} AND "createdAt" <= ${toDate}
     GROUP BY status
     ORDER BY "count" DESC
   `;
@@ -83,6 +105,8 @@ export const generateOrderAnalytics = async (fromDate: Date, toDate: Date): Prom
   return {
     title: 'Order Analytics Report',
     dateRange: `${fromDate.toLocaleDateString()} - ${toDate.toLocaleDateString()}`,
+    datasetName: dataset.name,
+    currency: dataset.currency,
     metrics: {
       totalRevenue: result._sum.amount || 0,
       totalOrders: result._count._all || 0,

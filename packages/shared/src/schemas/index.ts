@@ -4,6 +4,7 @@ export const CreateReportSchema = z.object({
   reportType: z.enum(['SALES_SUMMARY', 'ORDER_ANALYTICS'], {
     errorMap: () => ({ message: 'Invalid report type. Must be SALES_SUMMARY or ORDER_ANALYTICS' })
   }),
+  datasetId: z.string().uuid({ message: 'Invalid dataset ID' }),
   fromDate: z.string().refine((val) => {
     const date = new Date(val);
     return !isNaN(date.getTime());

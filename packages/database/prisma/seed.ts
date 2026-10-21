@@ -23,16 +23,32 @@ async function main() {
 
   console.log(`Created user: ${user.name}`);
 
-  // Check if orders already exist to avoid destructive behavior
-  const existingOrders = await prisma.order.count();
-  if (existingOrders > 0) {
-    console.log(`Database already has ${existingOrders} orders. Skipping seed data generation.`);
-    console.log('To re-seed, manually delete orders first or use a fresh database.');
+  // Check if datasets already exist to avoid destructive behavior
+  const existingDatasets = await prisma.dataset.count();
+  if (existingDatasets > 0) {
+    console.log(`⚠️  Database already has ${existingDatasets} datasets.`);
+    console.log('⚠️  Skipping seed data generation to avoid data loss.');
+    console.log('💡 To re-seed, manually delete datasets first:');
+    console.log('   - Run: DELETE FROM "Dataset"; in your SQLite client, or');
+    console.log('   - Delete the report.db file and run migrations again');
+    console.log('✅ Seed skipped successfully (data preserved).');
     return;
   }
 
+  // Create a sample dataset for demo data
+  const sampleDataset = await prisma.dataset.create({
+    data: {
+      userId: user.id,
+      name: 'Sample Orders Dataset',
+      currency: 'USD',
+      rowCount: 5000
+    }
+  });
+  console.log(`📁 Created sample dataset: ${sampleDataset.name}`);
+
   // Generate realistic orders over the last 6 months
   const now = new Date();
+  console.log(`📅 Generating orders from ${new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]} to ${now.toISOString().split('T')[0]}`);
   const orders = [];
 
   for (let i = 0; i < 5000; i++) {
@@ -60,6 +76,7 @@ async function main() {
     else if (statusRand > 0.80) status = 'PENDING';
 
     orders.push({
+      datasetId: sampleDataset.id,
       customerName,
       amount,
       status,
@@ -68,12 +85,15 @@ async function main() {
   }
 
   // Batch insert orders
-  console.log(`Inserting ${orders.length} orders...`);
+  console.log(`📊 Inserting ${orders.length} orders into database...`);
   await prisma.order.createMany({
     data: orders
   });
 
-  console.log('Database seeded successfully.');
+  console.log('✅ Database seeded successfully.');
+  console.log(`📈 Orders generated: ${orders.length}`);
+  console.log(`📅 Date range: Last 180 days from today`);
+  console.log(`💰 Currency: ${sampleDataset.currency}`);
 }
 
 main()

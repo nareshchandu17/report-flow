@@ -3,6 +3,8 @@ import PDFDocument from 'pdfkit';
 export interface ReportData {
   title: string;
   dateRange: string;
+  datasetName: string;
+  currency: string;
   metrics: {
     totalRevenue: number;
     totalOrders: number;
@@ -35,14 +37,15 @@ export const generatePDF = (data: ReportData): Promise<Buffer> => {
       // Logo Icon
       doc.roundedRect(50, 45, 36, 36, 8).fill(brandColor);
       doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(18).text('RF', 50, 55, { width: 36, align: 'center' });
-      
+
       // Company Name
       doc.fillColor(textDark).fontSize(20).text('ReportFlow', 100, 52);
 
       // Report Title & Dates (Right Aligned)
       doc.font('Helvetica-Bold').fontSize(16).text(data.title, 50, 45, { align: 'right', width: contentWidth });
-      doc.font('Helvetica').fontSize(10).fillColor(textMuted).text(data.dateRange, 50, 65, { align: 'right', width: contentWidth });
-      doc.text(`Generated: ${new Date().toLocaleString()}`, 50, 80, { align: 'right', width: contentWidth });
+      doc.font('Helvetica').fontSize(10).fillColor(textMuted).text(`Dataset: ${data.datasetName}`, 50, 65, { align: 'right', width: contentWidth });
+      doc.text(data.dateRange, 50, 78, { align: 'right', width: contentWidth });
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 50, 91, { align: 'right', width: contentWidth });
       
       doc.moveDown(3);
 
@@ -54,8 +57,16 @@ export const generatePDF = (data: ReportData): Promise<Buffer> => {
       const kpiWidth = (contentWidth - 45) / 4; // 4 boxes, 15px gap
       const kpiHeight = 65;
 
-      const formatCurrency = (val: number) => `$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      
+      const currencySymbols: Record<string, string> = {
+        USD: '$',
+        EUR: '€',
+        GBP: '£',
+        INR: '₹'
+      };
+      const currencySymbol = currencySymbols[data.currency] || data.currency;
+
+      const formatCurrency = (val: number) => `${currencySymbol}${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
       const kpis = [
         { label: 'Total Revenue', value: formatCurrency(data.metrics.totalRevenue) },
         { label: 'Total Orders', value: data.metrics.totalOrders.toLocaleString() },

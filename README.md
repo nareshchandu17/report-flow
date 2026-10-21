@@ -6,9 +6,14 @@ ReportFlow is an asynchronous PDF report generation system built with a modern m
 
 ## Features
 
+- **Dataset Management**: Upload and manage multiple CSV datasets with automatic validation
+- **Data Isolation**: Each dataset is isolated with user ownership and currency settings
 - **Asynchronous Processing**: Background job queue powered by BullMQ and Redis for non-blocking report generation
 - **Real-time Preview**: Interactive dashboard with live data visualization before PDF generation
 - **Multiple Report Types**: Support for Sales Summary and Order Analytics reports
+- **Multi-Currency Support**: PDF reports and UI display in USD, EUR, GBP, or INR
+- **JWT Authentication**: Secure user authentication with token-based access
+- **Column Mapping**: Flexible CSV column mapping for different data formats
 - **Idempotent Operations**: Built-in idempotency checks to prevent duplicate processing
 - **Reliable Storage**: Local file storage with orphaned file cleanup on failure
 - **Scheduled Reports**: Cron-based daily report generation
@@ -48,6 +53,21 @@ ReportFlow consists of four main services:
 - Docker (for Redis)
 - npm or yarn
 
+### Environment Setup
+
+Copy the example environment file:
+```bash
+cp .env.example .env
+```
+
+Configure the following variables in `.env`:
+- `DATABASE_URL`: SQLite database path
+- `REDIS_URL`: Redis connection URL
+- `PORT`: API server port
+- `NEXT_PUBLIC_API_URL`: Frontend API URL
+- `JWT_SECRET`: Secret for JWT token signing
+- `SESSION_SECRET`: Secret for session management
+
 ### Installation
 
 1. Clone the repository:
@@ -81,6 +101,12 @@ The application will be available at:
 - Web Dashboard: http://localhost:3000
 - API: http://localhost:4000
 
+### First Steps
+
+1. **Register an account**: Navigate to http://localhost:3000 and click "Sign up" to create your account
+2. **Import data**: Click "Import Data" to upload a CSV file with your order data
+3. **Generate reports**: Select a dataset, choose report type and date range, then generate PDF reports
+
 ## Environment Variables
 
 ### Web Application
@@ -97,37 +123,114 @@ The application will be available at:
 
 ## Usage
 
+### CSV Import Format
+
+Your CSV file should contain the following columns:
+
+| Column | Required | Description | Format |
+|--------|----------|-------------|--------|
+| `date` | Yes | Order date | YYYY-MM-DD |
+| `amount` | Yes | Order amount | Numeric |
+| `status` | Yes | Order status | PENDING, PROCESSING, COMPLETED, CANCELLED, or FAILED |
+| `customerName` | No | Customer name | String |
+
+Example CSV:
+```csv
+date,amount,status,customerName
+2024-01-15,150.50,COMPLETED,John Doe
+2024-01-16,89.99,PENDING,Jane Smith
+2024-01-17,299.00,PROCESSING,Bob Johnson
+```
+
 ### Creating a Report
 
 1. Navigate to the web dashboard
-2. Select report type and date range
-3. Click "Generate PDF Report"
-4. Monitor progress in real-time
-5. Download the completed PDF
+2. Select a dataset from the dropdown
+3. Choose report type (Sales Summary or Order Analytics)
+4. Select date range
+5. Click "Generate PDF Report"
+6. Monitor progress in real-time
+7. Download the completed PDF
 
 ### API Endpoints
+
+#### Authentication
+```http
+POST /api/auth/register
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "securepassword"
+}
+```
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "john@example.com",
+  "password": "securepassword"
+}
+```
 
 #### Create Report
 ```http
 POST /api/reports
 Content-Type: application/json
+Authorization: Bearer <jwt-token>
 Idempotency-Key: <unique-key>
 
 {
   "reportType": "SALES_SUMMARY",
-  "fromDate": "2026-01-01",
-  "toDate": "2026-01-31"
+  "fromDate": "2024-01-01",
+  "toDate": "2024-01-31",
+  "datasetId": "<dataset-uuid>"
 }
 ```
 
 #### Get Report Status
 ```http
 GET /api/reports/:id
+Authorization: Bearer <jwt-token>
 ```
 
 #### Download Report
 ```http
 GET /api/reports/:id/download
+Authorization: Bearer <jwt-token>
+```
+
+#### Upload CSV Preview
+```http
+POST /api/datasets/upload
+Content-Type: application/json
+Authorization: Bearer <jwt-token>
+
+{
+  "csvData": "date,amount,status\n2024-01-01,100.00,COMPLETED"
+}
+```
+
+#### Create Dataset
+```http
+POST /api/datasets/create
+Content-Type: application/json
+Authorization: Bearer <jwt-token>
+
+{
+  "name": "Q4 2024 Sales",
+  "currency": "USD",
+  "csvData": "date,amount,status\n2024-01-01,100.00,COMPLETED",
+  "columnMapping": {
+    "date": "date",
+    "amount": "amount",
+    "status": "status",
+    "customerName": "customerName"
+  }
+}
 ```
 
 ## Development

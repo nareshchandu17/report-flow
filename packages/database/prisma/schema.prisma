@@ -8,32 +8,51 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   name      String
-  email     String   @unique
-  createdAt DateTime @default(now())
+  email     String    @unique
+  password  String?
+  createdAt DateTime  @default(now())
 
   jobs      ReportJob[]
+  datasets  Dataset[]
 }
 
+model Dataset {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  currency    String   @default("USD")
+  rowCount    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders      Order[]
+  jobs        ReportJob[]
+
+  @@index([userId])
+}
 
 model Order {
   id           String      @id @default(uuid())
+  datasetId    String
   customerName String
   amount       Float
   status       String
   createdAt    DateTime    @default(now())
 
+  dataset      Dataset     @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+
+  @@index([datasetId])
   @@index([createdAt])
   @@index([status])
 }
 
-
-
 model ReportJob {
   id             String    @id @default(uuid())
   userId         String
+  datasetId      String
   reportType     String
   status         String    @default("QUEUED")
   fromDate       DateTime
@@ -49,9 +68,11 @@ model ReportJob {
   updatedAt      DateTime  @updatedAt
 
   user           User            @relation(fields: [userId], references: [id])
+  dataset        Dataset         @relation(fields: [datasetId], references: [id])
   artifact       ReportArtifact? @relation(fields: [artifactId], references: [id])
 
   @@index([userId])
+  @@index([datasetId])
   @@index([status])
   @@index([createdAt])
   @@index([idempotencyKey])

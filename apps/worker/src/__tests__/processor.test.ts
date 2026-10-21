@@ -5,19 +5,35 @@ import fs from 'fs/promises';
 
 describe('Worker Processor Integration Test', () => {
   let testUserId: string;
+  let testDatasetId: string;
 
   beforeAll(async () => {
     // Get the seed user
-    const user = await prisma.user.findUnique({ where: { email: 'test@example.com' } });
+    const user = await prisma.user.findFirst();
     if (!user) throw new Error('Seed user not found');
     testUserId = user.id;
+
+    // Get or create a test dataset
+    let dataset = await prisma.dataset.findFirst({ where: { userId: testUserId } });
+    if (!dataset) {
+      dataset = await prisma.dataset.create({
+        data: {
+          userId: testUserId,
+          name: 'Test Dataset',
+          currency: 'USD',
+          rowCount: 0
+        }
+      });
+    }
+    testDatasetId = dataset.id;
   });
 
   it('should process a job, create a PDF artifact, and update the database', async () => {
-    // 1. Create a job
+    // 1. Create a job with datasetId
     const job = await prisma.reportJob.create({
       data: {
         userId: testUserId,
+        datasetId: testDatasetId,
         reportType: REPORT_TYPES.SALES_SUMMARY,
         fromDate: new Date('2026-08-01'),
         toDate: new Date('2026-08-16'),

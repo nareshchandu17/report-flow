@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, BarChart, FileOutput, Loader2, Calendar, DollarSign, ShoppingCart, CheckCircle, TrendingUp, AlertCircle, RefreshCw } from "lucide-react";
-import { api } from "@/lib/api";
+import { FileText, BarChart, FileOutput, Loader2, Calendar, DollarSign, ShoppingCart, CheckCircle, TrendingUp, AlertCircle, RefreshCw, Database, LogOut, Upload } from "lucide-react";
+import { api, Dataset } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart as RechartsBarChart, Bar } from 'recharts';
 
@@ -12,7 +12,20 @@ export default function Dashboard() {
   const router = useRouter();
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportType, setReportType] = useState('SALES_SUMMARY');
-  
+
+  // Dataset state
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [selectedDataset, setSelectedDataset] = useState<string | null>(null);
+  const [isLoadingDatasets, setIsLoadingDatasets] = useState(true);
+
+  // Auth check
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      router.push('/login');
+    }
+  }, [router]);
+
   // Date states (default to last 30 days)
   const [fromDate, setFromDate] = useState(() => {
     const d = new Date();
@@ -27,11 +40,37 @@ export default function Dashboard() {
   const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
+    async function fetchDatasets() {
+      setIsLoadingDatasets(true);
+      try {
+        const data = await api.getDatasets();
+        setDatasets(data);
+        if (data.length > 0 && !selectedDataset) {
+          setSelectedDataset(data[0].id);
+        }
+      } catch (err: any) {
+        console.error("Failed to fetch datasets", err);
+        if (err.message.includes('401') || err.message.includes('Unauthorized')) {
+          api.logout();
+          router.push('/login');
+        }
+      } finally {
+        setIsLoadingDatasets(false);
+      }
+    }
+    fetchDatasets();
+  }, []);
+
+  useEffect(() => {
     async function fetchPreview() {
+      if (!selectedDataset) {
+        setIsLoadingPreview(false);
+        return;
+      }
       setIsLoadingPreview(true);
       setPreviewError(null);
       try {
-        const data = await api.getReportPreview(reportType, new Date(fromDate).toISOString(), new Date(toDate).toISOString());
+        const data = await api.getReportPreview(reportType, new Date(fromDate).toISOString(), new Date(toDate).toISOString(), selectedDataset);
         setPreviewData(data);
         setPreviewError(null);
       } catch (err: any) {
@@ -43,15 +82,20 @@ export default function Dashboard() {
       }
     }
     fetchPreview();
-  }, [reportType, fromDate, toDate]);
+  }, [reportType, fromDate, toDate, selectedDataset]);
 
   const handleGenerate = async () => {
+    if (!selectedDataset) {
+      alert('Please select a dataset');
+      return;
+    }
     setIsGenerating(true);
     try {
       const res = await api.createReport({
         reportType,
         fromDate: new Date(fromDate).toISOString(),
-        toDate: new Date(toDate).toISOString()
+        toDate: new Date(toDate).toISOString(),
+        datasetId: selectedDataset
       }, `req-${Date.now()}`);
 
       if (res.jobId) {
@@ -65,7 +109,11 @@ export default function Dashboard() {
     }
   };
 
-  const formatCurrency = (val: number) => `$${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formatCurrency = (val: number, currency = 'USD') => {
+    const symbols: Record<string, string> = { USD: '$', EUR: '€', GBP: '£', INR: '₹' };
+    const symbol = symbols[currency] || currency;
+    return `${symbol}${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -74,36 +122,79 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Live Analytics</h1>
           <p className="text-muted-foreground">Interactive preview of your data before generating static reports.</p>
         </div>
+
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push('/import')}
+            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+          >
+            <Upload className="mr-2 h-4 w-4" /> Import Data
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              api.logout();
+              router.push('/login');
+            }}
+            className="text-zinc-400 hover:text-white hover:bg-white/10"
+          >
+            <LogOut className="mr-2 h-4 w-4" /> Logout
+          </Button>
+        </div>
         
         <div className="flex flex-col sm:flex-row gap-3 bg-white/5 p-2 rounded-xl border border-white/10 backdrop-blur-md">
           <div className="flex items-center gap-2 px-2">
+            <Database className="w-4 h-4 text-muted-foreground" />
+            {isLoadingDatasets ? (
+              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+            ) : datasets.length === 0 ? (
+              <span className="text-sm text-muted-foreground">No datasets</span>
+            ) : (
+              <select
+                value={selectedDataset || ''}
+                onChange={e => setSelectedDataset(e.target.value)}
+                className="bg-transparent border-none text-sm text-white focus:ring-0 outline-none cursor-pointer"
+              >
+                {datasets.map(ds => (
+                  <option key={ds.id} value={ds.id} className="bg-zinc-900">
+                    {ds.name} ({ds.currency})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div className="w-px h-8 bg-white/10 hidden sm:block"></div>
+          <div className="flex items-center gap-2 px-2">
             <Calendar className="w-4 h-4 text-muted-foreground" />
-            <input 
-              type="date" 
-              value={fromDate} 
+            <input
+              type="date"
+              value={fromDate}
               onChange={e => setFromDate(e.target.value)}
               className="bg-transparent border-none text-sm text-white focus:ring-0 outline-none"
             />
             <span className="text-muted-foreground">-</span>
-            <input 
-              type="date" 
-              value={toDate} 
+            <input
+              type="date"
+              value={toDate}
               onChange={e => setToDate(e.target.value)}
               className="bg-transparent border-none text-sm text-white focus:ring-0 outline-none"
             />
           </div>
           <div className="w-px h-8 bg-white/10 hidden sm:block"></div>
           <div className="flex gap-1">
-            <Button 
-              variant={reportType === 'SALES_SUMMARY' ? 'default' : 'ghost'} 
+            <Button
+              variant={reportType === 'SALES_SUMMARY' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setReportType('SALES_SUMMARY')}
               className={reportType === 'SALES_SUMMARY' ? "bg-blue-600 hover:bg-blue-700 text-white" : "text-zinc-400"}
             >
               Sales
             </Button>
-            <Button 
-              variant={reportType === 'ORDER_ANALYTICS' ? 'default' : 'ghost'} 
+            <Button
+              variant={reportType === 'ORDER_ANALYTICS' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setReportType('ORDER_ANALYTICS')}
               className={reportType === 'ORDER_ANALYTICS' ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "text-zinc-400"}
@@ -147,10 +238,10 @@ export default function Dashboard() {
                 <DollarSign className="w-4 h-4 text-blue-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-white">{formatCurrency(previewData.metrics.totalRevenue)}</div>
+                <div className="text-2xl font-bold text-white">{formatCurrency(previewData.metrics.totalRevenue, previewData.currency)}</div>
               </CardContent>
             </Card>
-            
+
             <Card className="bg-gradient-to-br from-emerald-500/10 to-transparent border-emerald-500/20">
               <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-sm font-medium text-zinc-400">Total Orders</CardTitle>
@@ -177,7 +268,7 @@ export default function Dashboard() {
                 <TrendingUp className="w-4 h-4 text-amber-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-white">{formatCurrency(previewData.metrics.avgOrderValue)}</div>
+                <div className="text-2xl font-bold text-white">{formatCurrency(previewData.metrics.avgOrderValue, previewData.currency)}</div>
               </CardContent>
             </Card>
           </div>
@@ -210,10 +301,11 @@ export default function Dashboard() {
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
                       <XAxis dataKey="Date" stroke="#888" tick={{fill: '#888'}} tickMargin={10} />
-                      <YAxis stroke="#888" tick={{fill: '#888'}} tickFormatter={(value) => `$${value}`} />
-                      <Tooltip 
+                      <YAxis stroke="#888" tick={{fill: '#888'}} tickFormatter={(value) => value !== undefined ? formatCurrency(Number(value), previewData.currency) : ''} />
+                      <Tooltip
                         contentStyle={{ backgroundColor: '#18181b', border: '1px solid #333', borderRadius: '8px' }}
                         itemStyle={{ color: '#fff' }}
+                        formatter={(value: any) => value !== undefined ? formatCurrency(Number(value), previewData.currency) : ''}
                       />
                       <Area type="monotone" dataKey="Revenue" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
                     </AreaChart>

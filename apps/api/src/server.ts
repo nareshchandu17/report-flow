@@ -2,18 +2,20 @@ import express from 'express';
 import cors from 'cors';
 import pinoHttp from 'pino-http';
 import reportRoutes from './routes/reports';
+import datasetRoutes from './routes/datasets';
 
 const app = express();
 const port = process.env.PORT || 4000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(pinoHttp({
   level: process.env.LOG_LEVEL || 'info',
   autoLogging: true
 }));
 
-app.use('/api/reports', reportRoutes);
+app.use('/api', reportRoutes);
+app.use('/api/datasets', datasetRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });

@@ -59,9 +59,9 @@ export default async function (job: Job) {
 
     let reportData;
     if (reportJob.reportType === REPORT_TYPES.SALES_SUMMARY) {
-      reportData = await generateSalesSummary(reportJob.fromDate, reportJob.toDate);
+      reportData = await generateSalesSummary(reportJob.fromDate, reportJob.toDate, reportJob.datasetId);
     } else if (reportJob.reportType === REPORT_TYPES.ORDER_ANALYTICS) {
-      reportData = await generateOrderAnalytics(reportJob.fromDate, reportJob.toDate);
+      reportData = await generateOrderAnalytics(reportJob.fromDate, reportJob.toDate, reportJob.datasetId);
     } else {
       throw new Error(`Unsupported report type: ${reportJob.reportType}`);
     }

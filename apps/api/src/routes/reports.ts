@@ -7,14 +7,96 @@ import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
 
 const router = Router();
+
+// POST /api/auth/register
+router.post('/auth/register', async (req: Request, res: Response) => {
+  try {
+    const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Missing required fields' } });
+    }
+
+    const bcrypt = (await import('bcrypt')).default;
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+      data: { name, email, password: hashedPassword }
+    });
+
+    const jwt = (await import('jsonwebtoken')).default;
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || 'dev-secret', { expiresIn: '7d' });
+
+    res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
+  } catch (error: any) {
+    if (error.code === 'P2002') {
+      return res.status(409).json({ error: { code: 'USER_EXISTS', message: 'Email already registered' } });
+    }
+    req.log.error(error);
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'An internal error occurred' } });
+  }
+});
+
+// POST /api/auth/login
+router.post('/auth/login', async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Missing email or password' } });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (!user || !user.password) {
+      return res.status(401).json({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } });
+    }
+
+    const bcrypt = (await import('bcrypt')).default;
+    const validPassword = await bcrypt.compare(password, user.password);
+
+    if (!validPassword) {
+      return res.status(401).json({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } });
+    }
+
+    const jwt = (await import('jsonwebtoken')).default;
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || 'dev-secret', { expiresIn: '7d' });
+
+    res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
+  } catch (error) {
+    req.log.error(error);
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'An internal error occurred' } });
+  }
+});
+
+// Apply auth middleware to all other routes
 router.use(authMiddleware);
+
+// GET /api/datasets
+router.get('/datasets', async (req: Request, res: Response) => {
+  try {
+    const userId = req.currentUser.id;
+
+    const datasets = await prisma.dataset.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json(datasets);
+  } catch (error) {
+    req.log.error(error);
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'An internal error occurred' } });
+  }
+});
 
 // GET /api/reports/preview
 router.get('/preview', async (req: Request, res: Response) => {
   try {
-    const { type, fromDate, toDate } = req.query;
+    const { type, fromDate, toDate, datasetId } = req.query;
     
-    if (!type || !fromDate || !toDate) {
+    if (!type || !fromDate || !toDate || !datasetId) {
       return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Missing required query parameters' } });
     }
 
@@ -26,9 +108,9 @@ router.get('/preview', async (req: Request, res: Response) => {
 
     let data;
     if (type === 'SALES_SUMMARY') {
-      data = await generateSalesSummary(from, to);
+      data = await generateSalesSummary(from, to, datasetId as string);
     } else if (type === 'ORDER_ANALYTICS') {
-      data = await generateOrderAnalytics(from, to);
+      data = await generateOrderAnalytics(from, to, datasetId as string);
     } else {
       return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Invalid report type' } });
     }
@@ -52,7 +134,16 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Invalid report parameters' } });
     }
 
-    const { reportType, fromDate, toDate } = parsed.data;
+    const { reportType, fromDate, toDate, datasetId } = parsed.data;
+
+    // Verify dataset ownership
+    const dataset = await prisma.dataset.findUnique({
+      where: { id: datasetId }
+    });
+
+    if (!dataset || dataset.userId !== userId) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'You do not have access to this dataset' } });
+    }
 
     // Set toDate to end of day to include all data on the last day
     const to = new Date(toDate);
@@ -72,6 +163,7 @@ router.post('/', async (req: Request, res: Response) => {
     const reportJob = await prisma.reportJob.create({
       data: {
         userId,
+        datasetId,
         reportType,
         fromDate: new Date(fromDate),
         toDate: to,
@@ -106,6 +198,7 @@ router.get('/', async (req: Request, res: Response) => {
     const [reports, total] = await Promise.all([
       prisma.reportJob.findMany({
         where,
+        include: { dataset: true },
         orderBy: { createdAt: 'desc' },
         skip,
         take: pagination.limit
@@ -128,7 +221,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 
     const report = await prisma.reportJob.findUnique({
       where: { id },
-      include: { artifact: true }
+      include: { artifact: true, dataset: true }
     });
 
     if (!report) {
@@ -148,6 +241,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       startedAt: report.startedAt,
       completedAt: report.completedAt,
       errorMessage: report.errorMessage,
+      dataset: report.dataset,
       downloadAvailable: report.status === JOB_STATUS.COMPLETED && !!report.artifactId
     });
   } catch (error) {
