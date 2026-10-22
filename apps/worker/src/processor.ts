@@ -21,9 +21,13 @@ export default async function (job: Job) {
       const user = await prisma.user.findFirst({ where: { email: 'test@example.com' } });
       if (!user) throw new Error("No admin user found to attach scheduled report to");
 
+      const dataset = await prisma.dataset.findFirst({ where: { userId: user.id } });
+      if (!dataset) throw new Error("No dataset found for scheduled report");
+
       const scheduledJob = await prisma.reportJob.create({
         data: {
           userId: user.id,
+          datasetId: dataset.id,
           reportType: REPORT_TYPES.SALES_SUMMARY,
           fromDate,
           toDate,

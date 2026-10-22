@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { api, ReportJob } from "@/lib/api";
@@ -107,7 +107,7 @@ export default function ReportsHistory() {
                         </div>
                         <p className="text-sm text-muted-foreground">
                           {new Date(report.createdAt).toLocaleString()}
-                          {report.completedAt && ` � Completed: ${new Date(report.completedAt).toLocaleString()}`}
+                          {report.completedAt && ` ò Completed: ${new Date(report.completedAt).toLocaleString()}`}
                         </p>
                       </div>
                       <ChevronRight className="h-5 w-5 text-white/20 group-hover:text-white/60 transition-colors" />
