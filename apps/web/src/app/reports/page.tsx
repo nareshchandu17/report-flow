@@ -1,7 +1,8 @@
 ﻿"use client";
 
 import { useEffect, useState } from "react";
-import { api, ReportJob } from "@/lib/api";
+import { useRouter } from "next/navigation";
+import { api, ApiError, ReportJob } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,21 +10,28 @@ import { RefreshCw, FileText, ChevronRight, AlertCircle, Loader2 } from "lucide-
 import Link from "next/link";
 
 export default function ReportsHistory() {
+  const router = useRouter();
   const [reports, setReports] = useState<ReportJob[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const fetchReports = async () => {
+    if (!localStorage.getItem('auth_token')) {
+      router.push('/login');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      setError(null);
       const res = await api.getReports();
       setReports(res.data);
-      setError(null);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Failed to fetch reports');
-      setReports([]);
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 401) {
+        api.logout();
+        router.push('/login');
+      } else {
+        console.error(err);
+      }
     } finally {
       setLoading(false);
     }
@@ -70,17 +78,19 @@ export default function ReportsHistory() {
         <CardContent className="p-0">
           <div className="rounded-md border border-white/5">
             {loading ? (
-              <div className="p-12 text-center text-muted-foreground flex flex-col items-center">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
-                <p>Loading reports...</p>
-              </div>
-            ) : error ? (
-              <div className="p-12 text-center flex flex-col items-center gap-4">
-                <AlertCircle className="h-12 w-12 text-red-500" />
-                <p className="text-red-400">{error}</p>
-                <Button onClick={fetchReports} variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10">
-                  <RefreshCw className="mr-2 h-4 w-4" /> Retry
-                </Button>
+              <div className="divide-y divide-white/5" role="status" aria-label="Loading reports">
+                {Array.from({ length: 5 }, (_, index) => (
+                  <div key={index} className="flex items-center justify-between p-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3">
+                        <div className="h-4 w-32 animate-pulse rounded bg-white/10" />
+                        <div className="h-5 w-20 animate-pulse rounded-full bg-white/10" />
+                      </div>
+                      <div className="h-3 w-44 animate-pulse rounded bg-white/[0.06]" />
+                    </div>
+                    <div className="h-5 w-5 animate-pulse rounded bg-white/[0.06]" />
+                  </div>
+                ))}
               </div>
             ) : reports.length === 0 ? (
               <div className="p-12 text-center text-muted-foreground flex flex-col items-center">

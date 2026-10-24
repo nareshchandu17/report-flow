@@ -14,6 +14,7 @@ app.use(pinoHttp({
   autoLogging: true
 }));
 
+app.use('/api/reports', reportRoutes);
 app.use('/api', reportRoutes);
 app.use('/api/datasets', datasetRoutes);
 

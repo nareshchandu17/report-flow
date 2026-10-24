@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileText, BarChart, FileOutput, Loader2, Calendar, DollarSign, ShoppingCart, CheckCircle, TrendingUp, AlertCircle, RefreshCw, Database, LogOut, Upload } from "lucide-react";
-import { api, Dataset } from "@/lib/api";
+import { api, ApiError, Dataset } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart as RechartsBarChart, Bar } from 'recharts';
 
@@ -17,14 +17,6 @@ export default function Dashboard() {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [selectedDataset, setSelectedDataset] = useState<string | null>(null);
   const [isLoadingDatasets, setIsLoadingDatasets] = useState(true);
-
-  // Auth check
-  useEffect(() => {
-    const token = localStorage.getItem('auth_token');
-    if (!token) {
-      router.push('/login');
-    }
-  }, [router]);
 
   // Date states (default to last 30 days)
   const [fromDate, setFromDate] = useState(() => {
@@ -40,26 +32,37 @@ export default function Dashboard() {
   const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      setIsLoadingDatasets(false);
+      router.push('/login');
+      return;
+    }
+
+    let cancelled = false;
     async function fetchDatasets() {
-      setIsLoadingDatasets(true);
       try {
         const data = await api.getDatasets();
+        if (cancelled) return;
         setDatasets(data);
-        if (data.length > 0 && !selectedDataset) {
-          setSelectedDataset(data[0].id);
-        }
-      } catch (err: any) {
-        console.error("Failed to fetch datasets", err);
-        if (err.message.includes('401') || err.message.includes('Unauthorized')) {
+        setSelectedDataset((current) => current ?? data[0]?.id ?? null);
+      } catch (err: unknown) {
+        if (err instanceof ApiError && err.status === 401) {
           api.logout();
           router.push('/login');
+        } else {
+          console.error("Failed to fetch datasets", err);
         }
       } finally {
-        setIsLoadingDatasets(false);
+        if (!cancelled) setIsLoadingDatasets(false);
       }
     }
+
     fetchDatasets();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   useEffect(() => {
     async function fetchPreview() {
@@ -149,7 +152,11 @@ export default function Dashboard() {
           <div className="flex items-center gap-2 px-2">
             <Database className="w-4 h-4 text-muted-foreground" />
             {isLoadingDatasets ? (
-              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              <div
+                className="h-4 w-28 animate-pulse rounded bg-white/10"
+                role="status"
+                aria-label="Loading datasets"
+              />
             ) : datasets.length === 0 ? (
               <span className="text-sm text-muted-foreground">No datasets</span>
             ) : (
@@ -206,8 +213,29 @@ export default function Dashboard() {
       </div>
 
       {isLoadingPreview ? (
-        <div className="h-[400px] flex items-center justify-center border border-white/10 rounded-2xl bg-white/5 backdrop-blur-sm">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        <div
+          className="h-[400px] rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm"
+          role="status"
+          aria-label="Loading report preview"
+        >
+          <div className="flex h-full animate-pulse flex-col gap-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-2">
+                <div className="h-5 w-44 rounded bg-white/10" />
+                <div className="h-3 w-60 max-w-full rounded bg-white/[0.06]" />
+              </div>
+              <div className="h-9 w-36 rounded-md bg-white/10" />
+            </div>
+            <div className="flex min-h-0 flex-1 items-end gap-3 rounded-lg border border-white/5 bg-black/20 px-6 pb-6 pt-10">
+              {[35, 55, 42, 75, 60, 90, 68, 48, 78, 58, 84, 66].map((height, index) => (
+                <div
+                  key={index}
+                  className="flex-1 rounded-t bg-blue-500/15"
+                  style={{ height: `${height}%` }}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       ) : previewError ? (
         <div className="h-[400px] flex flex-col items-center justify-center border border-red-500/20 rounded-2xl bg-red-500/5 backdrop-blur-sm gap-4">

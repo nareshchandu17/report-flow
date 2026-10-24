@@ -1,5 +1,12 @@
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 export interface User {
   id: string;
   name: string;
@@ -73,7 +80,13 @@ export const api = {
     const res = await fetch(`${API_BASE_URL}/datasets`, {
       headers: getAuthHeaders()
     });
-    if (!res.ok) throw new Error('Failed to fetch datasets');
+    if (!res.ok) {
+      const errorText = await res.text();
+      if (res.status !== 401) {
+        console.error('Failed to fetch datasets:', res.status, errorText);
+      }
+      throw new ApiError(res.status === 401 ? 'Unauthorized' : 'Failed to fetch datasets', res.status);
+    }
     return res.json();
   },
 
@@ -136,7 +149,13 @@ export const api = {
     const res = await fetch(`${API_BASE_URL}/reports?${params.toString()}`, {
       headers: getAuthHeaders()
     });
-    if (!res.ok) throw new Error('Failed to fetch reports');
+    if (!res.ok) {
+      const errorText = await res.text();
+      if (res.status !== 401) {
+        console.error('Failed to fetch reports:', res.status, errorText);
+      }
+      throw new ApiError(res.status === 401 ? 'Unauthorized' : 'Failed to fetch reports', res.status);
+    }
     return res.json();
   },
 
