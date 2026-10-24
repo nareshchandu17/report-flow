@@ -120,35 +120,32 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-        <div>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Live Analytics</h1>
           <p className="text-muted-foreground">Interactive preview of your data before generating static reports.</p>
         </div>
 
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push('/import')}
-            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-          >
-            <Upload className="mr-2 h-4 w-4" /> Import Data
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              api.logout();
-              router.push('/login');
-            }}
-            className="text-zinc-400 hover:text-white hover:bg-white/10"
-          >
-            <LogOut className="mr-2 h-4 w-4" /> Logout
-          </Button>
-        </div>
-        
-        <div className="flex flex-col sm:flex-row gap-3 bg-white/5 p-2 rounded-xl border border-white/10 backdrop-blur-md">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            api.logout();
+            router.push('/login');
+          }}
+          className="group relative isolate shrink-0 overflow-hidden border-rose-400/25 bg-rose-500/[0.06] text-rose-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-300 hover:border-rose-300/50 hover:bg-rose-500/10 hover:text-rose-100 focus-visible:ring-rose-400/60 motion-reduce:transition-none"
+        >
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-rose-200/10 to-transparent transition-transform duration-700 group-hover:translate-x-full motion-reduce:transition-none"
+          />
+          <LogOut className="relative mr-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transform-none motion-reduce:transition-none" />
+          <span className="relative">Logout</span>
+        </Button>
+      </header>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex max-w-full flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-2 backdrop-blur-md">
           <div className="flex items-center gap-2 px-2">
             <Database className="w-4 h-4 text-muted-foreground" />
             {isLoadingDatasets ? (
@@ -163,7 +160,7 @@ export default function Dashboard() {
               <select
                 value={selectedDataset || ''}
                 onChange={e => setSelectedDataset(e.target.value)}
-                className="bg-transparent border-none text-sm text-white focus:ring-0 outline-none cursor-pointer"
+                className="max-w-full bg-transparent border-none text-sm text-white focus:ring-0 outline-none cursor-pointer"
               >
                 {datasets.map(ds => (
                   <option key={ds.id} value={ds.id} className="bg-zinc-900">
@@ -180,14 +177,14 @@ export default function Dashboard() {
               type="date"
               value={fromDate}
               onChange={e => setFromDate(e.target.value)}
-              className="bg-transparent border-none text-sm text-white focus:ring-0 outline-none"
+              className="w-[8.5rem] max-w-full bg-transparent border-none text-sm text-white focus:ring-0 outline-none"
             />
             <span className="text-muted-foreground">-</span>
             <input
               type="date"
               value={toDate}
               onChange={e => setToDate(e.target.value)}
-              className="bg-transparent border-none text-sm text-white focus:ring-0 outline-none"
+              className="w-[8.5rem] max-w-full bg-transparent border-none text-sm text-white focus:ring-0 outline-none"
             />
           </div>
           <div className="w-px h-8 bg-white/10 hidden sm:block"></div>
@@ -210,6 +207,14 @@ export default function Dashboard() {
             </Button>
           </div>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => router.push('/import')}
+          className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+        >
+          <Upload className="mr-2 h-4 w-4" /> Import Data
+        </Button>
       </div>
 
       {isLoadingPreview ? (

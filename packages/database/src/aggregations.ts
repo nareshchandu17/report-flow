@@ -36,12 +36,21 @@ export const generateSalesSummary = async (fromDate: Date, toDate: Date, dataset
   // Daily revenue aggregation
   const dailyData = await prisma.$queryRaw<any[]>`
     SELECT 
-      DATE("createdAt") as "Date",
+      DATE(
+        CASE 
+          WHEN typeof("createdAt") = 'integer' THEN "createdAt" / 1000 
+          ELSE "createdAt" 
+        END,
+        CASE 
+          WHEN typeof("createdAt") = 'integer' THEN 'unixepoch' 
+          ELSE '+0 days' 
+        END
+      ) as "Date",
       COUNT(*) as "Orders",
       SUM(amount) as "Revenue"
     FROM "Order"
     WHERE "datasetId" = ${datasetId} AND "createdAt" >= ${fromDate} AND "createdAt" <= ${toDate}
-    GROUP BY DATE("createdAt")
+    GROUP BY "Date"
     ORDER BY "Date" ASC
   `;
 
@@ -57,9 +66,13 @@ export const generateSalesSummary = async (fromDate: Date, toDate: Date, dataset
       completedOrders
     },
     tableData: dailyData.map(d => ({
-      Date: typeof d.Date === 'string' ? d.Date : d.Date.toISOString().split('T')[0],
-      Orders: Number(d.Orders),
-      Revenue: Number(d.Revenue)
+      Date: typeof d.Date === 'string'
+        ? d.Date
+        : d.Date instanceof Date
+          ? d.Date.toISOString().split('T')[0]
+          : String(d.Date || ''),
+      Orders: Number(d.Orders || 0),
+      Revenue: Number(d.Revenue || 0)
     }))
   };
 };

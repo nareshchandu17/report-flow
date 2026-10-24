@@ -39,6 +39,9 @@ export interface ReportJob {
 const getAuthHeaders = (): Record<string, string> => {
   if (typeof window === 'undefined') return {};
   const token = localStorage.getItem('auth_token');
+  if (token && !document.cookie.includes('auth_token=')) {
+    document.cookie = `auth_token=${encodeURIComponent(token)}; path=/; max-age=604800; SameSite=Lax`;
+  }
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
@@ -73,6 +76,7 @@ export const api = {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user');
+      document.cookie = 'auth_token=; path=/; max-age=0; SameSite=Lax';
     }
   },
 
@@ -141,10 +145,32 @@ export const api = {
     return res.json();
   },
 
-  getReports: async (page = 1, limit = 10, type?: string, status?: string) => {
-    const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
-    if (type) params.append('type', type);
-    if (status) params.append('status', status);
+  getReports: async (paramsObj: {
+    page?: number;
+    limit?: number;
+    type?: string;
+    status?: string;
+    search?: string;
+    sort?: string;
+    fromDate?: string;
+    toDate?: string;
+  } | number = 1, limitArg = 10, typeArg?: string, statusArg?: string) => {
+    let params: URLSearchParams;
+    if (typeof paramsObj === 'object') {
+      params = new URLSearchParams();
+      if (paramsObj.page) params.append('page', paramsObj.page.toString());
+      if (paramsObj.limit) params.append('limit', paramsObj.limit.toString());
+      if (paramsObj.type && paramsObj.type !== 'ALL') params.append('type', paramsObj.type);
+      if (paramsObj.status && paramsObj.status !== 'ALL') params.append('status', paramsObj.status);
+      if (paramsObj.search) params.append('search', paramsObj.search);
+      if (paramsObj.sort) params.append('sort', paramsObj.sort);
+      if (paramsObj.fromDate) params.append('fromDate', paramsObj.fromDate);
+      if (paramsObj.toDate) params.append('toDate', paramsObj.toDate);
+    } else {
+      params = new URLSearchParams({ page: paramsObj.toString(), limit: limitArg.toString() });
+      if (typeArg && typeArg !== 'ALL') params.append('type', typeArg);
+      if (statusArg && statusArg !== 'ALL') params.append('status', statusArg);
+    }
 
     const res = await fetch(`${API_BASE_URL}/reports?${params.toString()}`, {
       headers: getAuthHeaders()
@@ -155,6 +181,18 @@ export const api = {
         console.error('Failed to fetch reports:', res.status, errorText);
       }
       throw new ApiError(res.status === 401 ? 'Unauthorized' : 'Failed to fetch reports', res.status);
+    }
+    return res.json();
+  },
+
+  deleteReport: async (id: string) => {
+    const res = await fetch(`${API_BASE_URL}/reports/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.error?.message || 'Failed to delete report');
     }
     return res.json();
   },
@@ -181,7 +219,34 @@ export const api = {
     const res = await fetch(`${API_BASE_URL}/reports/preview?${params.toString()}`, {
       headers: getAuthHeaders()
     });
-    if (!res.ok) throw new Error('Failed to fetch report preview');
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.error?.message || 'Failed to fetch report preview');
+    }
     return res.json();
+  },
+
+  getDownloadUrl: (id: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    return `${API_BASE_URL}/reports/${id}/download${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  },
+
+  downloadReport: async (id: string, fileName?: string) => {
+    const res = await fetch(`${API_BASE_URL}/reports/${id}/download`, {
+      headers: getAuthHeaders()
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.error?.message || 'Failed to download report');
+    }
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName || `report-${id}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   }
 };

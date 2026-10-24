@@ -127,7 +127,7 @@ export default function LoginPage() {
                   setIsLogin(!isLogin);
                   setError(null);
                 }}
-                className="text-blue-400 hover:text-blue-300 font-medium"
+                className="text-blue-400 hover:text-blue-300 font-medium cursor-pointer"
               >
                 {isLogin ? 'Sign up' : 'Sign in'}
               </button>

@@ -10,6 +10,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist",
+    "rootDir": "../..",
     "baseUrl": ".",
     "paths": {
       "database": ["../../packages/database/src"],

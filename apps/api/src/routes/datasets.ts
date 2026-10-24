@@ -10,6 +10,21 @@ interface CSVRow {
   [key: string]: string;
 }
 
+// GET /api/datasets
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const userId = req.currentUser.id;
+    const datasets = await prisma.dataset.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(datasets);
+  } catch (error) {
+    req.log.error(error);
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'An internal error occurred' } });
+  }
+});
+
 // POST /api/datasets/upload
 router.post('/upload', async (req: Request, res: Response) => {
   try {

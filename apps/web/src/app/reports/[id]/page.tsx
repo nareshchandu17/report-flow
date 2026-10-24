@@ -16,6 +16,19 @@ export default function ReportDetails({ params }: { params: Promise<{ id: string
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    try {
+      setDownloading(true);
+      await api.downloadReport(id, `report_${report?.reportType || 'download'}_${id}.pdf`);
+    } catch (err: any) {
+      console.error('Download failed:', err);
+      window.location.href = api.getDownloadUrl(id);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const fetchReport = async () => {
     try {
@@ -211,12 +224,16 @@ export default function ReportDetails({ params }: { params: Promise<{ id: string
           ) : report.status === 'COMPLETED' ? (
             <Button 
               variant="default" 
-              asChild 
+              onClick={handleDownload}
+              disabled={downloading}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              <a href={`${API_BASE_URL}/reports/${report.id}/download`} download>
-                <FileDown className="mr-2 h-4 w-4" /> Download PDF
-              </a>
+              {downloading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <FileDown className="mr-2 h-4 w-4" />
+              )}
+              {downloading ? 'Downloading...' : 'Download PDF'}
             </Button>
           ) : (
             <Button variant="outline" disabled>

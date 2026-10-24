@@ -5,3 +5,6 @@ dist
 apps/web/.next
 apps/web/out
 report.db
+apps/worker/storage/reports/*.pdf
+docs/benchmarks/benchmark-results.json
+.playwright-mcp

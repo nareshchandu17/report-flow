@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import pinoHttp from 'pino-http';
+import authRoutes from './routes/auth';
 import reportRoutes from './routes/reports';
 import datasetRoutes from './routes/datasets';
 
@@ -14,9 +15,10 @@ app.use(pinoHttp({
   autoLogging: true
 }));
 
+app.use('/api/auth', authRoutes);
 app.use('/api/reports', reportRoutes);
-app.use('/api', reportRoutes);
 app.use('/api/datasets', datasetRoutes);
+app.use('/api', reportRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });

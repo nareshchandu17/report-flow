@@ -14,7 +14,8 @@
     "db:migrate": "npm run db:migrate --workspace=database",
     "db:seed": "npm run db:seed --workspace=database",
     "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "test:benchmark": "node scripts/benchmark-5000-records.js"
   },
   "devDependencies": {
     "@mermaid-js/mermaid-cli": "^11.16.0",
