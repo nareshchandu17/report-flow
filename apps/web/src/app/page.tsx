@@ -3,10 +3,16 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, BarChart, FileOutput, Loader2, Calendar, DollarSign, ShoppingCart, CheckCircle, TrendingUp, AlertCircle, RefreshCw, Database, LogOut, Upload } from "lucide-react";
+import { FileText, BarChart, FileOutput, Loader2, Calendar, DollarSign, ShoppingCart, CheckCircle, TrendingUp, AlertCircle, RefreshCw, Database, LogOut, Upload, AlertTriangle, X } from "lucide-react";
 import { api, ApiError, Dataset } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart as RechartsBarChart, Bar } from 'recharts';
+
+const parseValidDate = (dateStr: string): Date | null => {
+  if (!dateStr || typeof dateStr !== "string" || !dateStr.trim()) return null;
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? null : d;
+};
 
 export default function Dashboard() {
   const router = useRouter();
@@ -30,6 +36,22 @@ export default function Dashboard() {
   const [previewData, setPreviewData] = useState<any>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(true);
   const [previewError, setPreviewError] = useState<string | null>(null);
+
+  // Warning / Info Toast Notification State
+  interface ToastState {
+    title: string;
+    message: string;
+    type: "warning" | "error" | "info";
+  }
+  const [toast, setToast] = useState<ToastState | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => {
+      setToast(null);
+    }, 4500);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
@@ -70,14 +92,41 @@ export default function Dashboard() {
         setIsLoadingPreview(false);
         return;
       }
+
+      const from = parseValidDate(fromDate);
+      const to = parseValidDate(toDate);
+
+      if (!from || !to) {
+        setIsLoadingPreview(false);
+        setPreviewData(null);
+        setPreviewError("Please enter a valid start and end date.");
+        setToast({
+          type: "warning",
+          title: "Invalid Date",
+          message: "Please enter valid dates (YYYY-MM-DD) to update live preview."
+        });
+        return;
+      }
+
+      if (from > to) {
+        setIsLoadingPreview(false);
+        setPreviewData(null);
+        setPreviewError("The start date cannot be after the end date.");
+        setToast({
+          type: "warning",
+          title: "Invalid Date Range",
+          message: "The start date cannot be after the end date."
+        });
+        return;
+      }
+
       setIsLoadingPreview(true);
       setPreviewError(null);
       try {
-        const data = await api.getReportPreview(reportType, new Date(fromDate).toISOString(), new Date(toDate).toISOString(), selectedDataset);
+        const data = await api.getReportPreview(reportType, from.toISOString(), to.toISOString(), selectedDataset);
         setPreviewData(data);
         setPreviewError(null);
       } catch (err: any) {
-        console.error("Failed to fetch preview", err);
         setPreviewError(err.message || 'Failed to load preview data');
         setPreviewData(null);
       } finally {
@@ -89,24 +138,53 @@ export default function Dashboard() {
 
   const handleGenerate = async () => {
     if (!selectedDataset) {
-      alert('Please select a dataset');
+      setToast({
+        type: "warning",
+        title: "No Dataset Selected",
+        message: "Please select a dataset to generate a report."
+      });
       return;
     }
+
+    const from = parseValidDate(fromDate);
+    const to = parseValidDate(toDate);
+
+    if (!from || !to) {
+      setToast({
+        type: "warning",
+        title: "Invalid Date Format",
+        message: "Please provide valid start and end dates before generating a report."
+      });
+      return;
+    }
+
+    if (from > to) {
+      setToast({
+        type: "warning",
+        title: "Invalid Date Range",
+        message: "The start date cannot be after the end date."
+      });
+      return;
+    }
+
     setIsGenerating(true);
     try {
       const res = await api.createReport({
         reportType,
-        fromDate: new Date(fromDate).toISOString(),
-        toDate: new Date(toDate).toISOString(),
+        fromDate: from.toISOString(),
+        toDate: to.toISOString(),
         datasetId: selectedDataset
       }, `req-${Date.now()}`);
 
       if (res.jobId) {
         router.push(`/reports/${res.jobId}`);
       }
-    } catch (error) {
-      console.error(error);
-      alert('Failed to generate report');
+    } catch (error: any) {
+      setToast({
+        type: "error",
+        title: "Report Generation Failed",
+        message: error.message || "Failed to generate report"
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -359,6 +437,36 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </>
+      )}
+
+      {/* Floating Warning / Notification Toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm rounded-2xl border border-amber-500/30 bg-zinc-950/95 p-4 shadow-2xl backdrop-blur-xl animate-in slide-in-from-bottom-5 fade-in duration-300">
+          <div className="flex items-start gap-3">
+            <div className={`rounded-xl p-2 shrink-0 ${
+              toast.type === "error"
+                ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+            }`}>
+              {toast.type === "error" ? (
+                <AlertCircle className="h-5 w-5" />
+              ) : (
+                <AlertTriangle className="h-5 w-5" />
+              )}
+            </div>
+            <div className="flex-1 space-y-1 min-w-0">
+              <h4 className="text-sm font-semibold text-white tracking-wide">{toast.title}</h4>
+              <p className="text-xs text-zinc-300 leading-relaxed">{toast.message}</p>
+            </div>
+            <button
+              onClick={() => setToast(null)}
+              className="text-zinc-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+              aria-label="Close notification"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
