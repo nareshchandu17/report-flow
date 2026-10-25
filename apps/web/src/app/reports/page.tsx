@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useRef, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { api, ApiError, ReportJob } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,8 +25,27 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-export default function ReportsHistory() {
+export default function ReportsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-6 animate-pulse">
+          <div className="h-10 w-48 bg-white/10 rounded-lg" />
+          <div className="h-24 bg-white/5 rounded-2xl border border-white/10" />
+          <div className="h-96 bg-white/5 rounded-2xl border border-white/10" />
+        </div>
+      }
+    >
+      <ReportsHistory />
+    </Suspense>
+  );
+}
+
+function ReportsHistory() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
   const [reports, setReports] = useState<ReportJob[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -39,9 +58,11 @@ export default function ReportsHistory() {
   const [toDate, setToDate] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  // Pagination states
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  // Pagination states: default 20 per page, dynamic page from route
+  const pageParam = searchParams.get("page");
+  const initialPage = pageParam ? Math.max(1, parseInt(pageParam, 10) || 1) : 1;
+  const [page, setPage] = useState(initialPage);
+  const [pageSize, setPageSize] = useState(20);
 
   // Action Menu & Deletion Dialog
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -100,27 +121,65 @@ export default function ReportsHistory() {
     fetchReports();
   }, [fetchReports]);
 
+  // Sync page state when URL query changes (e.g. browser back/forward buttons)
+  useEffect(() => {
+    const pageInUrl = searchParams.get("page");
+    const parsedPage = pageInUrl ? Math.max(1, parseInt(pageInUrl, 10) || 1) : 1;
+    if (parsedPage !== page) {
+      setPage(parsedPage);
+    }
+  }, [searchParams, page]);
+
+  // Dynamic route update on page change
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      const validTotalPages = Math.max(1, Math.ceil(total / pageSize));
+      if (newPage < 1 || (total > 0 && newPage > validTotalPages) || newPage === page) return;
+      setPage(newPage);
+
+      const params = new URLSearchParams(searchParams.toString());
+      if (newPage <= 1) {
+        params.delete("page");
+      } else {
+        params.set("page", String(newPage));
+      }
+      const query = params.toString();
+      router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [page, total, pageSize, searchParams, pathname, router]
+  );
+
+  const resetPageToFirst = useCallback(() => {
+    setPage(1);
+    if (searchParams.has("page")) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("page");
+      const query = params.toString();
+      router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    }
+  }, [searchParams, pathname, router]);
+
   // Reset page when filters change
   const handleSearchChange = (val: string) => {
     setSearch(val);
-    setPage(1);
+    resetPageToFirst();
   };
 
   const handleStatusChange = (val: string) => {
     setStatusFilter(val);
-    setPage(1);
+    resetPageToFirst();
   };
 
   const handleSortChange = (val: "newest" | "oldest") => {
     setSortOrder(val);
-    setPage(1);
+    resetPageToFirst();
   };
 
   const handleClearDateFilter = () => {
     setFromDate("");
     setToDate("");
-    setPage(1);
     setShowDatePicker(false);
+    resetPageToFirst();
   };
 
   // Delete Action
@@ -214,7 +273,7 @@ export default function ReportsHistory() {
     return pages.map((p, idx) => {
       if (p === "...") {
         return (
-          <span key={`ellipsis-${idx}`} className="px-2 py-1 text-sm text-zinc-500 select-none">
+          <span key={`ellipsis-${idx}`} className="px-1.5 py-1 text-xs text-zinc-500 select-none">
             …
           </span>
         );
@@ -224,12 +283,15 @@ export default function ReportsHistory() {
       return (
         <button
           key={`page-${pageNum}`}
-          onClick={() => setPage(pageNum)}
-          className={`h-8 w-8 rounded-lg text-xs font-medium transition-all ${
+          type="button"
+          onClick={() => handlePageChange(pageNum)}
+          className={`h-8 min-w-[32px] px-2 rounded-lg text-xs font-medium select-none transition-all duration-200 ${
             isActive
-              ? "bg-white text-black font-semibold shadow-sm"
-              : "text-zinc-400 hover:text-white hover:bg-white/10"
+              ? "bg-white text-black font-semibold shadow-[0_0_15px_rgba(255,255,255,0.25)] scale-105 cursor-default"
+              : "cursor-pointer text-zinc-400 hover:text-white hover:bg-white/10 hover:border-white/15 border border-transparent hover:scale-105 active:scale-95"
           }`}
+          aria-label={`Go to page ${pageNum}`}
+          aria-current={isActive ? "page" : undefined}
         >
           {pageNum}
         </button>
@@ -310,11 +372,10 @@ export default function ReportsHistory() {
                 e.stopPropagation();
                 setShowDatePicker(!showDatePicker);
               }}
-              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all ${
-                fromDate || toDate
-                  ? "bg-blue-500/10 border-blue-500/30 text-blue-300"
-                  : "bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/[0.08]"
-              }`}
+              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all ${fromDate || toDate
+                ? "bg-blue-500/10 border-blue-500/30 text-blue-300"
+                : "bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/[0.08]"
+                }`}
             >
               <Calendar className="h-3.5 w-3.5 text-zinc-400" />
               <span>
@@ -329,7 +390,7 @@ export default function ReportsHistory() {
             {showDatePicker && (
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="absolute left-0 top-full mt-2 z-40 w-72 rounded-xl border border-white/10 bg-zinc-950 p-4 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 space-y-3"
+                className="absolute left-0 top-full mt-2 z-50 w-72 rounded-xl border border-white/10 bg-zinc-950 p-4 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 space-y-3"
               >
                 <div className="flex items-center justify-between pb-2 border-b border-white/10">
                   <span className="text-xs font-semibold text-white">Filter by Creation Date</span>
@@ -351,7 +412,7 @@ export default function ReportsHistory() {
                       value={fromDate}
                       onChange={(e) => {
                         setFromDate(e.target.value);
-                        setPage(1);
+                        resetPageToFirst();
                       }}
                       className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
                     />
@@ -363,7 +424,7 @@ export default function ReportsHistory() {
                       value={toDate}
                       onChange={(e) => {
                         setToDate(e.target.value);
-                        setPage(1);
+                        resetPageToFirst();
                       }}
                       className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
                     />
@@ -440,7 +501,7 @@ export default function ReportsHistory() {
                     setStatusFilter("ALL");
                     setFromDate("");
                     setToDate("");
-                    setPage(1);
+                    resetPageToFirst();
                   }}
                   className="mt-4 border-white/10 text-xs"
                 >
@@ -576,51 +637,61 @@ export default function ReportsHistory() {
               </div>
 
               {/* Right: Numbered Pagination Controls & Page Size */}
-              {totalPages > 1 && (
-                <div className="flex items-center gap-1.5">
-                  {/* Previous Button */}
-                  <button
-                    disabled={page <= 1}
-                    onClick={() => setPage(page - 1)}
-                    className="h-8 w-8 rounded-lg flex items-center justify-center border border-white/10 bg-white/[0.03] text-zinc-300 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none transition-all"
-                    aria-label="Previous page"
+              <div className="flex items-center gap-1.5">
+                {/* Previous Button (<) with cursor-pointer & micro-interactions */}
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => handlePageChange(page - 1)}
+                  className={`group relative h-8 w-8 rounded-lg flex items-center justify-center border border-white/10 transition-all duration-200 select-none ${
+                    page <= 1
+                      ? "opacity-30 cursor-not-allowed bg-white/[0.02] text-zinc-600"
+                      : "cursor-pointer bg-white/[0.04] text-zinc-300 hover:text-white hover:bg-white/10 hover:border-white/20 hover:scale-110 active:scale-90 hover:shadow-[0_0_12px_rgba(255,255,255,0.12)]"
+                  }`}
+                  aria-label="Previous page"
+                  title="Previous page"
+                >
+                  <ChevronLeft className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
+                </button>
+
+                {/* Numbered Page Buttons */}
+                <div className="flex items-center gap-1">{renderPageNumbers()}</div>
+
+                {/* Next Button (>) with cursor-pointer & micro-interactions */}
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() => handlePageChange(page + 1)}
+                  className={`group relative h-8 w-8 rounded-lg flex items-center justify-center border border-white/10 transition-all duration-200 select-none ${
+                    page >= totalPages
+                      ? "opacity-30 cursor-not-allowed bg-white/[0.02] text-zinc-600"
+                      : "cursor-pointer bg-white/[0.04] text-zinc-300 hover:text-white hover:bg-white/10 hover:border-white/20 hover:scale-110 active:scale-90 hover:shadow-[0_0_12px_rgba(255,255,255,0.12)]"
+                  }`}
+                  aria-label="Next page"
+                  title="Next page"
+                >
+                  <ChevronRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                </button>
+
+                {/* Page Size Selector */}
+                <div className="relative ml-2">
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      handlePageChange(1);
+                    }}
+                    className="appearance-none bg-white/[0.04] border border-white/10 rounded-lg pl-2 pr-6 py-1 text-xs text-zinc-300 focus:outline-none cursor-pointer hover:bg-white/[0.08] transition-colors"
                   >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-
-                  {/* Numbered Page Buttons */}
-                  <div className="flex items-center gap-1">{renderPageNumbers()}</div>
-
-                  {/* Next Button */}
-                  <button
-                    disabled={page >= totalPages}
-                    onClick={() => setPage(page + 1)}
-                    className="h-8 w-8 rounded-lg flex items-center justify-center border border-white/10 bg-white/[0.03] text-zinc-300 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none transition-all"
-                    aria-label="Next page"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-
-                  {/* Page Size Selector */}
-                  <div className="relative ml-2">
-                    <select
-                      value={pageSize}
-                      onChange={(e) => {
-                        setPageSize(Number(e.target.value));
-                        setPage(1);
-                      }}
-                      className="appearance-none bg-white/[0.04] border border-white/10 rounded-lg pl-2 pr-6 py-1 text-xs text-zinc-300 focus:outline-none cursor-pointer"
-                    >
-                      <option value={10} className="bg-zinc-900 text-white">10 / page</option>
-                      <option value={20} className="bg-zinc-900 text-white">20 / page</option>
-                      <option value={50} className="bg-zinc-900 text-white">50 / page</option>
-                    </select>
-                    <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 text-[9px]">
-                      ▾
-                    </div>
+                    <option value={20} className="bg-zinc-900 text-white">20 / page</option>
+                    <option value={50} className="bg-zinc-900 text-white">50 / page</option>
+                    <option value={100} className="bg-zinc-900 text-white">100 / page</option>
+                  </select>
+                  <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 text-[9px]">
+                    ▾
                   </div>
                 </div>
-              )}
+              </div>
             </div>
           )}
         </CardContent>

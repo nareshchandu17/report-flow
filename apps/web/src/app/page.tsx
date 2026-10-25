@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, BarChart, FileOutput, Loader2, Calendar, DollarSign, ShoppingCart, CheckCircle, TrendingUp, AlertCircle, RefreshCw, Database, LogOut, Upload, AlertTriangle, X } from "lucide-react";
+import { FileText, BarChart, FileOutput, Loader2, Calendar, DollarSign, ShoppingCart, CheckCircle, TrendingUp, AlertCircle, RefreshCw, Database, Upload, AlertTriangle, X } from "lucide-react";
 import { api, ApiError, Dataset } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart as RechartsBarChart, Bar } from 'recharts';
@@ -196,6 +196,41 @@ export default function Dashboard() {
     return `${symbol}${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
+  const formatYAxisCurrency = (val: number, currency = 'USD') => {
+    const symbols: Record<string, string> = { USD: '$', EUR: '€', GBP: '£', INR: '₹' };
+    const symbol = symbols[currency] || currency;
+    if (val === 0) return `${symbol}0.00`;
+    return `${symbol}${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const formatXAxisDate = (dateStr: string) => {
+    if (!dateStr || typeof dateStr !== 'string') return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const d = new Date(year, month, day);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const formatTooltipDate = (dateStr: string) => {
+    if (!dateStr || typeof dateStr !== 'string') return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const d = new Date(year, month, day);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -203,23 +238,6 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Live Analytics</h1>
           <p className="text-muted-foreground">Interactive preview of your data before generating static reports.</p>
         </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            api.logout();
-            router.push('/login');
-          }}
-          className="group relative isolate shrink-0 overflow-hidden border-rose-400/25 bg-rose-500/[0.06] text-rose-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-300 hover:border-rose-300/50 hover:bg-rose-500/10 hover:text-rose-100 focus-visible:ring-rose-400/60 motion-reduce:transition-none"
-        >
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-rose-200/10 to-transparent transition-transform duration-700 group-hover:translate-x-full motion-reduce:transition-none"
-          />
-          <LogOut className="relative mr-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transform-none motion-reduce:transition-none" />
-          <span className="relative">Logout</span>
-        </Button>
       </header>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -403,7 +421,7 @@ export default function Dashboard() {
               <div className="h-[400px] w-full mt-4">
                 <ResponsiveContainer width="100%" height="100%">
                   {reportType === 'SALES_SUMMARY' ? (
-                    <AreaChart data={previewData.tableData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                    <AreaChart data={previewData.tableData} margin={{ top: 12, right: 30, left: 16, bottom: 8 }}>
                       <defs>
                         <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -411,22 +429,46 @@ export default function Dashboard() {
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                      <XAxis dataKey="Date" stroke="#888" tick={{fill: '#888'}} tickMargin={10} />
-                      <YAxis stroke="#888" tick={{fill: '#888'}} tickFormatter={(value) => value !== undefined ? formatCurrency(Number(value), previewData.currency) : ''} />
+                      <XAxis
+                        dataKey="Date"
+                        stroke="#888"
+                        tick={{ fill: '#888', fontSize: 12 }}
+                        tickMargin={12}
+                        minTickGap={28}
+                        interval="preserveStartEnd"
+                        tickFormatter={formatXAxisDate}
+                      />
+                      <YAxis
+                        stroke="#888"
+                        width={85}
+                        tick={{ fill: '#888', fontSize: 12 }}
+                        tickMargin={8}
+                        tickFormatter={(value) => value !== undefined ? formatYAxisCurrency(Number(value), previewData.currency) : ''}
+                      />
                       <Tooltip
-                        contentStyle={{ backgroundColor: '#18181b', border: '1px solid #333', borderRadius: '8px' }}
+                        contentStyle={{
+                          backgroundColor: '#18181b',
+                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          borderRadius: '12px',
+                          boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+                        }}
                         itemStyle={{ color: '#fff' }}
-                        formatter={(value: any) => value !== undefined ? formatCurrency(Number(value), previewData.currency) : ''}
+                        labelFormatter={(label: any) => formatTooltipDate(label)}
+                        formatter={(value: any) => [value !== undefined ? formatCurrency(Number(value), previewData.currency) : '', 'Revenue']}
                       />
                       <Area type="monotone" dataKey="Revenue" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
                     </AreaChart>
                   ) : (
-                    <RechartsBarChart data={previewData.tableData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                    <RechartsBarChart data={previewData.tableData} margin={{ top: 12, right: 30, left: 16, bottom: 8 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                      <XAxis dataKey="status" stroke="#888" tick={{fill: '#888'}} tickMargin={10} />
-                      <YAxis stroke="#888" tick={{fill: '#888'}} />
+                      <XAxis dataKey="status" stroke="#888" tick={{ fill: '#888', fontSize: 12 }} tickMargin={12} />
+                      <YAxis stroke="#888" width={60} tick={{ fill: '#888', fontSize: 12 }} tickMargin={8} />
                       <Tooltip 
-                        contentStyle={{ backgroundColor: '#18181b', border: '1px solid #333', borderRadius: '8px' }}
+                        contentStyle={{
+                          backgroundColor: '#18181b',
+                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          borderRadius: '12px'
+                        }}
                         itemStyle={{ color: '#fff' }}
                       />
                       <Bar dataKey="count" fill="#10b981" radius={[4, 4, 0, 0]} />
