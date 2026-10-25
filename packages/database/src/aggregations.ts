@@ -65,7 +65,7 @@ export const generateSalesSummary = async (fromDate: Date, toDate: Date, dataset
       avgOrderValue,
       completedOrders
     },
-    tableData: dailyData.map(d => ({
+    tableData: dailyData.map((d: any) => ({
       Date: typeof d.Date === 'string'
         ? d.Date
         : d.Date instanceof Date
@@ -126,7 +126,7 @@ export const generateOrderAnalytics = async (fromDate: Date, toDate: Date, datas
       avgOrderValue: result._count._all ? (result._sum.amount || 0) / result._count._all : 0,
       completedOrders: completedResult._count._all || 0
     },
-    tableData: statusData.map(d => ({
+    tableData: statusData.map((d: any) => ({
       status: d.status,
       count: Number(d.count),
       amount: Number(d.amount)

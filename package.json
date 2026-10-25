@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:worker\" \"npm run dev:web\"",
@@ -13,7 +13,9 @@
     "dev:web": "npm run dev --workspace=web",
     "db:migrate": "npm run db:migrate --workspace=database",
     "db:seed": "npm run db:seed --workspace=database",
-    "build": "npm run build --workspaces --if-present",
+    "build:packages": "npm run build --workspace=shared && npm run build --workspace=database",
+    "build:apps": "npm run build --workspace=api && npm run build --workspace=worker && npm run build --workspace=web",
+    "build": "npm run build:packages && npm run build:apps",
     "test": "npm run test --workspaces --if-present",
     "test:benchmark": "node scripts/benchmark-5000-records.js"
   },
