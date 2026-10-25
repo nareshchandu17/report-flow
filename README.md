@@ -1,268 +1,210 @@
 # ReportFlow
 
-<p align="center">
-  <strong>Production-Grade Distributed Asynchronous Report Generation Platform</strong>
-</p>
+Background PDF report generator built with Node.js, Express, BullMQ, Redis, and Next.js.
 
-<p align="center">
-  <a href="https://github.com/nareshchandu17/report-flow/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/nareshchandu17/report-flow/ci.yml?branch=main&style=flat-square&logo=github&label=CI%20Build" alt="CI Status"></a>
-  <img src="https://img.shields.io/badge/TypeScript-5.3-blue?style=flat-square&logo=typescript" alt="TypeScript">
-  <img src="https://img.shields.io/badge/Next.js-16.3-black?style=flat-square&logo=next.js" alt="Next.js">
-  <img src="https://img.shields.io/badge/BullMQ-5.0-red?style=flat-square&logo=redis" alt="BullMQ">
-  <img src="https://img.shields.io/badge/Node.js-22.x-green?style=flat-square&logo=node.js" alt="Node.js">
-  <img src="https://img.shields.io/badge/Prisma-5.22-38bdf8?style=flat-square&logo=prisma" alt="Prisma">
-  <img src="https://img.shields.io/badge/License-MIT-purple?style=flat-square" alt="License">
+<p align="left">
+  <a href="https://github.com/nareshchandu17/report-flow/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/nareshchandu17/report-flow/ci.yml?branch=main&style=flat-square&logo=github&label=build" alt="Build Status"></a>
+  <img src="https://img.shields.io/badge/TypeScript-5.3-blue?style=flat-square" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Next.js-16.3-black?style=flat-square" alt="Next.js">
+  <img src="https://img.shields.io/badge/BullMQ-5.0-red?style=flat-square" alt="BullMQ">
+  <img src="https://img.shields.io/badge/Redis-7-red?style=flat-square" alt="Redis">
+  <img src="https://img.shields.io/badge/Node.js-22.x-green?style=flat-square" alt="Node.js">
+  <img src="https://img.shields.io/badge/Prisma-5.22-38bdf8?style=flat-square" alt="Prisma">
 </p>
 
 ---
 
-## 📌 Executive Summary
+## Overview
 
-In data-intensive SaaS applications, generating analytical reports synchronously blocks the Node.js event loop, triggers HTTP request timeouts, and leads to server crashes under concurrent load. 
+Generating PDF reports synchronously inside an HTTP request blocks the Node.js event loop and leads to timeouts as datasets grow. 
 
-**ReportFlow** is an enterprise-ready, distributed, asynchronous report-generation platform engineered to process high-volume datasets completely out-of-band. By decoupling client HTTP requests through a Redis-backed queue and deploying a dedicated pool of background workers, ReportFlow delivers **sub-30ms API response times** while processing thousands of analytical records with **100% mathematical integrity**.
+ReportFlow offloads report generation to background workers using a Redis-backed BullMQ queue. The API accepts requests and returns in **under 30ms**, while background workers handle SQL aggregation and stream PDF files to disk.
 
 ![ReportFlow Architecture](./architecture.png)
 
 ---
 
-## ⚡ Audited Performance Benchmarks
+## Performance (Tested on 5,000–6,000 Records)
 
-The pipeline has been benchmarked and verified under high-throughput workloads (5,000 to 6,000 business records per job) across consecutive isolated trials. Full methodology and raw reproduction traces are documented in [`docs/benchmarks/5000-record-verification.md`](./docs/benchmarks/5000-record-verification.md).
+Measured with automated end-to-end trials under [`scripts/benchmark-5000-records.js`](./scripts/benchmark-5000-records.js). Full log traces are available in [`docs/benchmarks/5000-record-verification.md`](./docs/benchmarks/5000-record-verification.md).
 
-| Evaluated Metric | Measured Result | Production Significance |
+| Metric | Result | Notes |
 |---|---|---|
-| **API Response Latency** | **13.39 ms – 30.71 ms** | Instant non-blocking `202 Accepted` response; web UI never hangs |
-| **Tested Dataset Scale** | **5,000 – 6,000 records / job** | Validated handling of enterprise-scale transactional datasets |
-| **Background Processing Time** | **216.44 ms – 223.19 ms** | SQL aggregation, status progression, and PDF generation |
-| **Record Integrity & Fidelity** | **100.0% (0 dropped / 0 duplicate)** | Authoritative SQLite sums matched computed metrics down to the cent |
-| **Worker Concurrency** | **5 concurrent jobs / process** | High throughput without memory exhaustion |
-| **Bulk Ingestion Speed** | **814 ms (5,000 rows) &bull; 2,367 ms (6,000 rows)** | Transactional chunking (100 rows/batch) preventing SQLite lock contention |
+| **API Response Time** | **13.39 ms – 30.71 ms** | `POST /api/reports` enqueues job and returns `202 Accepted` immediately |
+| **Tested Record Volume** | **5,000 – 6,000 rows / job** | Verified across multiple runs |
+| **Background Processing Time** | **216 ms – 223 ms** | SQL aggregation + PDFKit compilation + file write |
+| **Data Accuracy** | **100% match** | Raw SQLite sums matched computed metrics down to the cent; 0 dropped records |
+| **Worker Concurrency** | **5 jobs in parallel** | Worker pool limit per process |
+| **CSV Ingestion Speed** | **814 ms (5,000 rows)** | Inserted in 100-record transactional batches |
 
-> **Reproduce the benchmark:**
-> ```bash
-> npm run test:benchmark
-> ```
+To run the benchmark yourself:
+```bash
+npm run test:benchmark
+```
 
 ---
 
-## 🏗 System Architecture & Execution Lifecycle
-
-ReportFlow is structured as a modular TypeScript monorepo orchestrated via npm workspaces:
+## Architecture
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT TIER                               │
-│  Next.js 16 Dashboard (Turbopack) • Glassmorphic UI • Real-time Status  │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ HTTP (REST)
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                              API GATEWAY                               │
-│  Express.js • JWT Authentication • Zod Schema Guards • Idempotency     │
-└───────────────┬───────────────────────────────────────┬────────────────┘
-                │                                       │
-     Enqueues Job Payload                  Persists State & Metadata
-                │                                       │
-                ▼                                       ▼
-┌───────────────────────────────┐       ┌────────────────────────────────┐
-│      REDIS QUEUE (BullMQ)     │       │        DATABASE LAYER          │
-│  Job Queue • Concurrency: 5   │       │  SQLite + Prisma ORM (WAL)     │
-│  Cron Scheduler: 0 0 * * *    │       │  Datasets • Orders • Reports   │
-└───────────────┬───────────────┘       └────────────────┬───────────────┘
-                │                                        ▲
-        Picks Up Job                                     │ Reads Aggregates &
-                │                                        │ Updates Milestones
-                ▼                                        │
-┌────────────────────────────────────────────────────────┴───────────────┐
-│                           WORKER SERVICES                              │
-│  BullMQ Processor • SQL-Level Aggregations • PDFKit Streaming Compiler │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                         Streams Compiled Binary
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                       PERSISTENT ARTIFACT STORAGE                      │
-│     Secure Local Storage • MIME: application/pdf • UUID Filenames      │
-└────────────────────────────────────────────────────────────────────────┘
+┌─────────────┐      ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
+│   Web UI    │─────>│   Express   │─────>│    Redis    │─────>│   Worker    │
+│  (Next.js)  │      │     API     │      │  (BullMQ)   │      │ (Processor) │
+└─────────────┘      └─────────────┘      └─────────────┘      └─────────────┘
+                            │                                           │
+                            ▼                                           ▼
+                     ┌─────────────┐                           ┌─────────────┐
+                     │   SQLite    │                           │    Disk     │
+                     │  (Prisma)   │                           │ (PDF Files) │
+                     └─────────────┘                           └─────────────┘
 ```
 
-### Complete Asynchronous Lifecycle Trace
+### How a Report is Generated
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Client as Web Client / Browser
+    actor Client as Browser
     participant API as Express API (:4000)
-    participant Redis as BullMQ + Redis Queue
-    participant Worker as Background Worker
-    participant DB as SQLite Database (Prisma)
-    participant Storage as File Storage
+    participant Redis as Redis (BullMQ)
+    participant Worker as Worker Process
+    participant DB as SQLite (Prisma)
+    participant Disk as Local Storage
 
     Client->>API: POST /api/reports (datasetId, dateRange, reportType)
-    Note over API: Validates Zod Schema & checks dataset ownership
-    API->>DB: INSERT ReportJob (status: 'QUEUED', progress: 0)
-    API->>Redis: queue.add('generate-report', { jobId })
-    API-->>Client: 202 Accepted { jobId, status: 'QUEUED' } (13ms – 30ms)
+    API->>DB: Save ReportJob (status: 'QUEUED', progress: 0)
+    API->>Redis: Add job to queue
+    API-->>Client: 202 Accepted { jobId } (13ms – 30ms)
 
-    Note over Client,Worker: Client event loop is completely unblocked
-
-    Redis->>Worker: Worker dispatches job (concurrency: 5)
-    Worker->>DB: UPDATE ReportJob (status: 'PROCESSING', progress: 10)
-    Worker->>DB: SQL-level aggregation (COUNT, SUM, GROUP BY Date)
-    Worker->>DB: UPDATE ReportJob (progress: 60)
-    Worker->>Worker: PDFKit streaming vector PDF compilation
-    Worker->>DB: UPDATE ReportJob (progress: 80)
-    Worker->>Storage: Stream report_<type>_<id>.pdf to disk
-    Worker->>DB: INSERT ReportArtifact record
-    Worker->>DB: UPDATE ReportJob (status: 'COMPLETED', progress: 100)
+    Redis->>Worker: Worker picks up job
+    Worker->>DB: Update status to 'PROCESSING' (progress: 10%)
+    Worker->>DB: Run SQL aggregations (COUNT, SUM, daily grouping)
+    Worker->>DB: Update progress to 60%
+    Worker->>Worker: Compile PDF with PDFKit
+    Worker->>DB: Update progress to 80%
+    Worker->>Disk: Write report_<id>.pdf
+    Worker->>DB: Mark status as 'COMPLETED' (progress: 100%)
 
     Client->>API: GET /api/reports/:id/download
-    API->>Storage: Verify file presence and stream PDF
-    API-->>Client: 200 OK (Content-Type: application/pdf)
+    API->>Disk: Stream PDF to client
+    API-->>Client: 200 OK (application/pdf)
 ```
 
 ---
 
-## 🛠 Engineering Deep Dives
+## Key Technical Decisions
 
-### 1. Decoupled Asynchronous Processing & Queue Resilience
-- **BullMQ & Redis**: Heavy data crunching is isolated from the HTTP server into independent worker processes.
-- **Milestone Progress Reporting**: Live progress increments (`10%` &rarr; `60%` &rarr; `80%` &rarr; `100%`) enable users to monitor job state in real-time.
-- **Cron-Driven Automations**: Includes scheduled midnight execution (`0 0 * * *`) with deduplicated job identifiers (`daily-sales-report`).
-- **Graceful Shutdown**: Intercepts `SIGTERM` signals to finish executing jobs before releasing Redis connections.
-
-### 2. High-Performance Streaming Aggregation
-- **SQL-Level Aggregation**: Calculations (`totalRevenue`, `completedOrders`, `avgOrderValue`, and time-series bucketing) execute directly within the database engine via raw optimized SQL queries, preventing memory bloat.
-- **Direct-to-Disk PDFKit Streaming**: Reports are compiled directly into output write-streams, bypassing intermediate in-memory buffer duplicates.
-
-### 3. Defensive Reliability & Data Isolation
-- **10,000-Row Memory Protection Guard**: The CSV ingestion pipeline validates schema constraints and enforces an ingestion ceiling to prevent heap exhaustion.
-- **Atomic Transactions**: Batch imports are processed in 100-record chunks inside Prisma transactions.
-- **Orphaned Artifact Cleanup**: If generation fails midway, partially written files are unlinked automatically, preserving storage health.
-- **Strict Multi-Tenant Isolation**: Every dataset and report job is bounded to the authenticated `userId`.
-
-### 4. Modern Glassmorphic Frontend & Dynamic Routing
-- **Next.js 16 App Router & Turbopack**: Built with React Server/Client Components, dynamic search parameter synchronization (`/reports?page=2`), and `<Suspense>` boundaries.
-- **Rich Micro-Interactions**: Hover scales, subtle glow states, animated chevron indicators, and interactive modals.
-- **Live Recharts Visualization**: Custom SVG viewbox margins and formatters preventing numerical clipping on axes across all screen sizes.
+- **Queue-based execution (BullMQ + Redis)**: API routes only validate payloads and push job IDs into Redis. Workers process jobs independently, reporting progress milestones (`10%` &rarr; `60%` &rarr; `80%` &rarr; `100%`) so the UI can show live status.
+- **In-database aggregations**: Metrics like revenue, completed orders, and daily breakdowns run directly in SQLite via SQL queries, preventing memory spikes from loading thousands of rows into Node.js.
+- **Streaming PDF writes**: PDFKit streams generated pages directly to disk rather than buffering complete files in RAM.
+- **Defensive limits**: CSV uploads are capped at 10,000 rows to prevent heap exhaustion. Database inserts run in 100-row chunks inside transactions.
+- **Cleanup on failure**: If a report job fails mid-generation, any partially written file on disk is deleted automatically.
+- **Graceful shutdown**: Workers catch `SIGTERM` signals and finish active jobs before closing Redis connections.
+- **URL-synced UI state**: The Next.js 16 frontend keeps pagination (`?page=2`) and filters in sync with the browser URL.
 
 ---
 
-## 📦 Monorepo Workspace Structure
+## Project Structure
 
 ```
 report-flow/
 ├── apps/
-│   ├── api/                  # Express.js REST API with JWT Auth & Multer CSV parsing
-│   │   ├── src/routes/       # /auth, /datasets, /reports endpoints
-│   │   └── src/queue.ts      # BullMQ Producer queue integration
-│   ├── web/                  # Next.js 16 Client with Tailwind CSS & Glassmorphism
-│   │   ├── src/app/          # App router pages: Dashboard, History, Import, Details
-│   │   └── src/components/   # Reusable UI components, Navbar, and Modal dialogs
-│   └── worker/               # Dedicated background processing service
-│       ├── src/processor.ts  # Job consumer: DB queries + PDFKit rendering
-│       └── src/worker.ts     # Worker initialization, concurrency pool, and cron
+│   ├── api/          # Express REST API (auth, datasets, reports)
+│   ├── web/          # Next.js 16 dashboard (charts, filters, report history)
+│   └── worker/       # Background worker (BullMQ job consumer + PDFKit)
 ├── packages/
-│   ├── database/             # Prisma ORM schema, migrations, seed, & aggregations
-│   └── shared/               # Shared TypeScript schemas, DTOs, and Zod validators
-├── docs/
-│   └── benchmarks/           # Audited performance reports & methodology
-├── scripts/                  # Automated 5,000-record synthetic benchmarking suite
-└── docker-compose.yml        # Multi-service container orchestration (Redis)
+│   ├── database/     # Prisma schema, migrations, seed, queries
+│   └── shared/       # Shared TypeScript types and Zod schemas
+├── docs/benchmarks/  # Benchmark documentation and logs
+├── scripts/          # Benchmark reproduction scripts
+└── docker-compose.yml
 ```
 
 ---
 
-## 🚀 Quickstart & Setup
+## Quickstart
 
 ### Prerequisites
-- **Node.js**: `v20.x` or `v22.x`
-- **Docker**: For local Redis instance
-- **npm**: `v10.x` or higher
+- Node.js 20 or 22
+- Docker (for Redis)
+- npm 10+
 
-### 1. Clone & Install
+### 1. Install dependencies
 ```bash
 git clone https://github.com/nareshchandu17/report-flow.git
 cd report-flow
 npm install
 ```
 
-### 2. Configure Environment Variables
+### 2. Set up environment
 ```bash
 cp .env.example .env
 ```
-Ensure your `.env` contains:
+
+Ensure `.env` contains:
 ```env
 DATABASE_URL="file:./report.db"
 REDIS_URL="redis://127.0.0.1:6390"
 PORT=4000
 NEXT_PUBLIC_API_URL="http://localhost:4000/api"
-JWT_SECRET="your-secure-jwt-secret-key"
+JWT_SECRET="your-jwt-secret-key"
 ```
 
-### 3. Start Infrastructure & Initialize Database
+### 3. Start Redis and seed the database
 ```bash
-# Start Redis container
 docker compose up -d
-
-# Generate Prisma Client & Run Migrations
 npm run build:packages
 npm run db:seed
 ```
 
-### 4. Launch Development Environment
+### 4. Run the app
 ```bash
 npm run dev
 ```
-The services will be live at:
-- **Web Dashboard**: `http://localhost:3000`
-- **REST API**: `http://localhost:4000`
-- **Background Worker**: Running and listening for queue events
+
+- **Frontend**: http://localhost:3000
+- **API**: http://localhost:4000
+- **Worker**: Runs in the background and listens for queue jobs
 
 ---
 
-## 📡 API Reference
+## API Summary
 
-| Endpoint | Method | Auth | Description |
-|---|---|---|---|
-| `/api/auth/register` | `POST` | Public | Register new user account |
-| `/api/auth/login` | `POST` | Public | Authenticate user & receive JWT |
-| `/api/datasets` | `GET` | Bearer | Fetch user's uploaded datasets |
-| `/api/datasets/create` | `POST` | Bearer | Ingest CSV data with column mapping |
-| `/api/reports` | `POST` | Bearer | Enqueue asynchronous report job (returns `202`) |
-| `/api/reports` | `GET` | Bearer | List user report history with pagination & filters |
-| `/api/reports/:id` | `GET` | Bearer | Retrieve job progress & execution status |
-| `/api/reports/:id/download` | `GET` | Bearer/UUID | Stream generated PDF artifact |
-| `/api/reports/:id` | `DELETE` | Bearer | Delete report metadata and PDF file |
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/auth/register` | `POST` | Register user account |
+| `/api/auth/login` | `POST` | Login & receive JWT token |
+| `/api/datasets` | `GET` | List user's datasets |
+| `/api/datasets/create` | `POST` | Import CSV dataset with column mapping |
+| `/api/reports` | `POST` | Queue a report job (returns `202 Accepted` with `jobId`) |
+| `/api/reports` | `GET` | List user's generated reports (paginated) |
+| `/api/reports/:id` | `GET` | Get report job status & progress percentage |
+| `/api/reports/:id/download` | `GET` | Download generated PDF file |
+| `/api/reports/:id` | `DELETE` | Delete report record and its file from disk |
 
 ---
 
-## 🧪 Automated Testing Suite
-
-The repository maintains an automated test suite across unit, integration, and load dimensions:
+## Testing
 
 ```bash
-# Run all workspace test suites
+# Run unit and integration tests across all workspaces
 npm test
 
-# Run isolated 5,000+ record load benchmark
+# Run the 5,000-record benchmark test
 npm run test:benchmark
 
-# Build all monorepo workspaces in deterministic sequence
+# Build all packages and applications in dependency order
 npm run build
 ```
 
 ---
 
-## 📄 Generated PDF Artifact Sample
+## Sample Report
 
-Below is an authentic sample of the vector PDF report produced by the worker:
-
-![Generated PDF Artifact Sample](./pdf-screenshot.png)
+![Sample Report](./pdf-screenshot.png)
 
 ---
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License. See [LICENSE](./LICENSE) for details.
+MIT
