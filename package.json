@@ -12,6 +12,7 @@
     "dev:worker": "npm run dev --workspace=worker",
     "dev:web": "npm run dev --workspace=web",
     "db:migrate": "npm run db:migrate --workspace=database",
+    "db:migrate:deploy": "npm run db:migrate:deploy --workspace=database",
     "db:seed": "npm run db:seed --workspace=database",
     "build:packages": "npm run build --workspace=shared && npm run build --workspace=database",
     "build:apps": "npm run build --workspace=api && npm run build --workspace=worker && npm run build --workspace=web",
