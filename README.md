@@ -205,6 +205,16 @@ npm run build
 
 ---
 
+## Roadmap & Future Enhancements
+
+- **Dynamic & Schema-Agnostic Ingestion**: Expand beyond fixed order schemas to ingest arbitrary CSV/JSON structures, supporting dynamic column typing and custom user-defined formula metrics.
+- **High-Volume Scaling (20,000+ Records)**: Upgrade worker pipelines with cursor-based streaming database queries and worker thread offloading to scale processing from 5,000–6,000 records to 20,000+ rows while keeping memory flat.
+- **Custom Report Builder & Visual Layouts**: Introduce drag-and-drop widget composition, customizable PDF design themes, brand logos, and multi-chart dashboards.
+- **Cloud Storage & Event Notifications**: Add S3/Cloudflare R2 object storage with pre-signed download URLs, automated email delivery via Resend/SendGrid, and outbound webhook callbacks on job completion.
+- **Team Workspaces & API Access**: Multi-tenant workspaces with role-based access control (RBAC) and scoped API tokens for headless programmatic reporting.
+
+---
+
 ## License
 
 MIT
